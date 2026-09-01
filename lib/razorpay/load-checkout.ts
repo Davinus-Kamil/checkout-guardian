@@ -19,6 +19,7 @@ type RazorpayCheckoutOptions = {
 
 type RazorpayCheckoutInstance = {
   open: () => void;
+  on: (event: string, handler: (response: unknown) => void) => void;
 };
 
 type RazorpayCheckoutConstructor = new (
