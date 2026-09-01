@@ -1,3 +1,4 @@
+import { prisma } from "@/lib/prisma";
 import { verifyRazorpayPaymentSignature } from "@/lib/razorpay/verify-signature";
 
 export const runtime = "nodejs";
@@ -36,10 +37,40 @@ export async function POST(request: Request) {
       signature,
     });
 
-    return Response.json(
-      { verified },
-      { status: verified ? 200 : 400 },
-    );
+    if (!verified) {
+      return Response.json({ verified: false }, { status: 400 });
+    }
+
+    const order = await prisma.order.findUnique({
+      where: { razorpayOrderId: orderId },
+    });
+
+    if (!order) {
+      return Response.json(
+        {
+          verified: false,
+          error: "Failed to verify payment",
+        },
+        { status: 500 },
+      );
+    }
+
+    await prisma.payment.upsert({
+      where: { razorpayPaymentId: paymentId },
+      update: {},
+      create: {
+        orderId: order.id,
+        razorpayPaymentId: paymentId,
+        method: null,
+        gatewayStatus: "captured",
+        guardianState: "SUCCESS",
+        failureCategory: null,
+        errorCode: null,
+        errorReason: null,
+      },
+    });
+
+    return Response.json({ verified: true }, { status: 200 });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Failed to verify payment";
