@@ -76,7 +76,7 @@ model Payment {
 model RecoverySession {
   id                String   @id @default(cuid())
   orderId           String
-  originalPaymentId String
+  originalPaymentId String   @unique
   status            String
   attemptCount      Int      @default(0)
   createdAt         DateTime @default(now())
@@ -87,7 +87,6 @@ model RecoverySession {
   decisions       Decision[]
 
   @@index([orderId])
-  @@index([originalPaymentId])
 }
 
 model PaymentEvent {
