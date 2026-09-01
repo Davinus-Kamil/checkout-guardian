@@ -1,7 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { loadRazorpayCheckout } from "@/lib/razorpay/load-checkout";
+import {
+  loadRazorpayCheckout,
+  type RazorpayCheckoutResponse,
+} from "@/lib/razorpay/load-checkout";
 
 const MIN_QUANTITY = 1;
 const MAX_QUANTITY = 5;
@@ -16,9 +19,10 @@ export default function PurchasePanel() {
   const [quantity, setQuantity] = useState(MIN_QUANTITY);
   const [isStartingCheckout, setIsStartingCheckout] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [unverifiedPaymentIds, setUnverifiedPaymentIds] = useState<
-    string | null
-  >(null);
+  const [isVerifyingPayment, setIsVerifyingPayment] = useState(false);
+  const [verificationMessage, setVerificationMessage] = useState<string | null>(
+    null,
+  );
 
   function decreaseQuantity() {
     setQuantity((current) => Math.max(MIN_QUANTITY, current - 1));
@@ -30,7 +34,7 @@ export default function PurchasePanel() {
 
   async function handleBuyNow() {
     setErrorMessage(null);
-    setUnverifiedPaymentIds(null);
+    setVerificationMessage(null);
     setIsStartingCheckout(true);
 
     try {
@@ -80,14 +84,7 @@ export default function PurchasePanel() {
         order_id: order.id,
         theme: { color: "#8a4b1f" },
         handler(payment) {
-          console.info("Unverified Razorpay payment identifiers", {
-            razorpay_payment_id: payment.razorpay_payment_id,
-            razorpay_order_id: payment.razorpay_order_id,
-            razorpay_signature: payment.razorpay_signature,
-          });
-          setUnverifiedPaymentIds(
-            `Unverified payment ${payment.razorpay_payment_id} for order ${payment.razorpay_order_id}`,
-          );
+          void verifyPayment(payment);
         },
       });
 
@@ -100,6 +97,44 @@ export default function PurchasePanel() {
       );
     } finally {
       setIsStartingCheckout(false);
+    }
+  }
+
+  async function verifyPayment(payment: RazorpayCheckoutResponse) {
+    setErrorMessage(null);
+    setVerificationMessage(null);
+    setIsVerifyingPayment(true);
+
+    try {
+      const response = await fetch("/api/payments/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          razorpay_payment_id: payment.razorpay_payment_id,
+          razorpay_order_id: payment.razorpay_order_id,
+          razorpay_signature: payment.razorpay_signature,
+        }),
+      });
+      const payload: unknown = await response.json().catch(() => null);
+      const verified =
+        payload &&
+        typeof payload === "object" &&
+        "verified" in payload &&
+        payload.verified === true;
+
+      if (!verified) {
+        throw new Error("Payment could not be verified. Please try again.");
+      }
+
+      setVerificationMessage("Payment verified successfully");
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Payment could not be verified. Please try again.",
+      );
+    } finally {
+      setIsVerifyingPayment(false);
     }
   }
 
@@ -149,8 +184,12 @@ export default function PurchasePanel() {
         </p>
       ) : null}
 
-      {unverifiedPaymentIds ? (
-        <p className="text-sm leading-6 text-muted">{unverifiedPaymentIds}</p>
+      {isVerifyingPayment ? (
+        <p className="text-sm leading-6 text-muted">Verifying payment…</p>
+      ) : null}
+
+      {verificationMessage ? (
+        <p className="text-sm leading-6 text-muted">{verificationMessage}</p>
       ) : null}
 
       <p className="text-sm leading-6 text-muted">

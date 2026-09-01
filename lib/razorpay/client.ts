@@ -13,6 +13,11 @@ function getRazorpayCredentials() {
   return { keyId, keySecret };
 }
 
+export function getRazorpayKeySecret() {
+  const { keySecret } = getRazorpayCredentials();
+  return keySecret;
+}
+
 export function getRazorpayClient() {
   const { keyId, keySecret } = getRazorpayCredentials();
 
