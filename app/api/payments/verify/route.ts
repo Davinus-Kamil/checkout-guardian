@@ -57,7 +57,9 @@ export async function POST(request: Request) {
 
     await prisma.payment.upsert({
       where: { razorpayPaymentId: paymentId },
-      update: {},
+      update: {
+        guardianState: "SUCCESS",
+      },
       create: {
         orderId: order.id,
         razorpayPaymentId: paymentId,
