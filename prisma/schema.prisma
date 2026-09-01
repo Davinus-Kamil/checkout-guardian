@@ -1,0 +1,125 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Merchant {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+
+  policy MerchantPolicy?
+  orders Order[]
+}
+
+model MerchantPolicy {
+  id                      String   @id @default(cuid())
+  merchantId              String   @unique
+  requireConfirmedFailure Boolean
+  maxRecoveryAttempts     Int
+  allowAlternativeMethod  Boolean
+  unknownStateAction      String
+  riskFailureAction       String
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  merchant Merchant @relation(fields: [merchantId], references: [id])
+}
+
+model Order {
+  id              String   @id @default(cuid())
+  merchantId      String
+  razorpayOrderId String   @unique
+  amount          Int
+  currency        String
+  status          String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  merchant         Merchant          @relation(fields: [merchantId], references: [id])
+  payments         Payment[]
+  recoverySessions RecoverySession[]
+
+  @@index([merchantId])
+}
+
+model Payment {
+  id                String   @id @default(cuid())
+  orderId           String
+  razorpayPaymentId String   @unique
+  method            String?
+  gatewayStatus     String
+  guardianState     String
+  failureCategory   String?
+  errorCode         String?
+  errorReason       String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  order                    Order             @relation(fields: [orderId], references: [id])
+  events                   PaymentEvent[]
+  originalRecoverySessions RecoverySession[]
+  decisions                Decision[]
+
+  @@index([orderId])
+}
+
+model RecoverySession {
+  id                String   @id @default(cuid())
+  orderId           String
+  originalPaymentId String
+  status            String
+  attemptCount      Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  order           Order      @relation(fields: [orderId], references: [id])
+  originalPayment Payment    @relation(fields: [originalPaymentId], references: [id])
+  decisions       Decision[]
+
+  @@index([orderId])
+  @@index([originalPaymentId])
+}
+
+model PaymentEvent {
+  id        String   @id @default(cuid())
+  paymentId String
+  eventType String
+  payload   Json
+  createdAt DateTime @default(now())
+
+  payment Payment @relation(fields: [paymentId], references: [id])
+
+  @@index([paymentId])
+}
+
+model Decision {
+  id                String   @id @default(cuid())
+  recoverySessionId String
+  paymentId         String
+  failureCategory   String?
+  paymentState      String
+  proposedAction    String
+  proposalReason    String?
+  policyResult      String?
+  policyReason      String?
+  executedAction    String?
+  outcome           String?
+  recoveredAmount   Int?
+  createdAt         DateTime @default(now())
+
+  recoverySession RecoverySession @relation(fields: [recoverySessionId], references: [id])
+  payment         Payment         @relation(fields: [paymentId], references: [id])
+
+  @@index([recoverySessionId])
+  @@index([paymentId])
+}
