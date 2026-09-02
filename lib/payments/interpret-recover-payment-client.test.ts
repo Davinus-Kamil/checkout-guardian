@@ -5,8 +5,29 @@ import {
   shouldRetryRecoverPayment,
 } from "./interpret-recover-payment-client.ts";
 
-test("200 started:true → started", () => {
-  assert.equal(
+const validCheckout = {
+  orderId: "order_original",
+  amount: 349900,
+  currency: "INR",
+};
+
+test("200 started:true + valid checkout → started", () => {
+  assert.deepEqual(
+    interpretRecoverPaymentHttpResponse(200, {
+      started: true,
+      recoverySessionId: "rsess_1",
+      decisionId: "dec_1",
+      action: "REOPEN_CHECKOUT",
+      attemptCount: 1,
+      sessionStatus: "IN_PROGRESS",
+      checkout: validCheckout,
+    }),
+    { outcome: "started", checkout: validCheckout },
+  );
+});
+
+test("200 started:true with missing/malformed checkout → unsafe", () => {
+  assert.deepEqual(
     interpretRecoverPaymentHttpResponse(200, {
       started: true,
       recoverySessionId: "rsess_1",
@@ -15,76 +36,107 @@ test("200 started:true → started", () => {
       attemptCount: 1,
       sessionStatus: "IN_PROGRESS",
     }),
-    "started",
+    { outcome: "unsafe" },
+  );
+  assert.deepEqual(
+    interpretRecoverPaymentHttpResponse(200, {
+      started: true,
+      checkout: { orderId: "  ", amount: 349900, currency: "INR" },
+    }),
+    { outcome: "unsafe" },
+  );
+  assert.deepEqual(
+    interpretRecoverPaymentHttpResponse(200, {
+      started: true,
+      checkout: { orderId: "order_original", amount: 0, currency: "INR" },
+    }),
+    { outcome: "unsafe" },
+  );
+  assert.deepEqual(
+    interpretRecoverPaymentHttpResponse(200, {
+      started: true,
+      checkout: {
+        orderId: "order_original",
+        amount: 349900.5,
+        currency: "INR",
+      },
+    }),
+    { outcome: "unsafe" },
   );
 });
 
 test("200 PAYMENT_NOT_FOUND → payment_not_found", () => {
-  assert.equal(
+  assert.deepEqual(
     interpretRecoverPaymentHttpResponse(200, {
       started: false,
       reason: "PAYMENT_NOT_FOUND",
     }),
-    "payment_not_found",
+    { outcome: "payment_not_found" },
   );
 });
 
 test("200 other started:false reasons → denied", () => {
-  assert.equal(
+  assert.deepEqual(
     interpretRecoverPaymentHttpResponse(200, {
       started: false,
       reason: "ALREADY_SUCCEEDED",
     }),
-    "denied",
+    { outcome: "denied" },
   );
-  assert.equal(
+  assert.deepEqual(
     interpretRecoverPaymentHttpResponse(200, {
       started: false,
-      reason: "MAX_ATTEMPTS_REACHED",
-      policyResult: "BLOCK",
+      reason: "RECOVERY_STATE_CHANGED",
     }),
-    "denied",
+    { outcome: "denied" },
   );
-  assert.equal(
+  assert.deepEqual(
     interpretRecoverPaymentHttpResponse(200, {
       started: false,
       reason: "FETCH_FAILED",
     }),
-    "denied",
+    { outcome: "denied" },
   );
 });
 
 test("non-2xx HTTP is unsafe even with a JSON reason", () => {
-  assert.equal(
+  assert.deepEqual(
     interpretRecoverPaymentHttpResponse(500, {
       started: false,
       reason: "INTERNAL_ERROR",
     }),
-    "unsafe",
+    { outcome: "unsafe" },
   );
-  assert.equal(
+  assert.deepEqual(
     interpretRecoverPaymentHttpResponse(400, {
       started: false,
       reason: "INVALID_INPUT",
     }),
-    "unsafe",
+    { outcome: "unsafe" },
   );
-  assert.equal(
+  assert.deepEqual(
     interpretRecoverPaymentHttpResponse(500, {
       started: false,
       reason: "PAYMENT_NOT_FOUND",
     }),
-    "unsafe",
+    { outcome: "unsafe" },
   );
 });
 
 test("malformed payloads are unsafe", () => {
-  assert.equal(interpretRecoverPaymentHttpResponse(200, null), "unsafe");
-  assert.equal(interpretRecoverPaymentHttpResponse(200, []), "unsafe");
-  assert.equal(interpretRecoverPaymentHttpResponse(200, { started: false }), "unsafe");
-  assert.equal(
+  assert.deepEqual(interpretRecoverPaymentHttpResponse(200, null), {
+    outcome: "unsafe",
+  });
+  assert.deepEqual(interpretRecoverPaymentHttpResponse(200, []), {
+    outcome: "unsafe",
+  });
+  assert.deepEqual(
+    interpretRecoverPaymentHttpResponse(200, { started: false }),
+    { outcome: "unsafe" },
+  );
+  assert.deepEqual(
     interpretRecoverPaymentHttpResponse(200, { started: false, reason: "  " }),
-    "unsafe",
+    { outcome: "unsafe" },
   );
 });
 

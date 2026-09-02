@@ -10,6 +10,10 @@ import {
   type RecoveryPolicyContext,
 } from "./evaluate-recovery-policy.ts";
 import {
+  loadRecoveryCheckoutOrder,
+  type RecoveryCheckoutOrder,
+} from "./load-recovery-checkout-order.ts";
+import {
   loadRecoveryGateContext,
   type RecoveryGateContextFailureReason,
   type RecoveryGateContextResult,
@@ -45,7 +49,14 @@ export type PaymentRecoveryFailureReason =
   | PolicyGateReason
   | PersistRecoveryGateDecisionFailureReason
   | StartRecoveryAttemptFailureReason
-  | "INTERNAL_ERROR";
+  | "INTERNAL_ERROR"
+  | "RECOVERY_STATE_CHANGED";
+
+export type RecoveryCheckoutInstructions = {
+  orderId: string;
+  amount: number;
+  currency: string;
+};
 
 export type RunPaymentRecoveryResult =
   | {
@@ -55,6 +66,7 @@ export type RunPaymentRecoveryResult =
       action: "REOPEN_CHECKOUT";
       attemptCount: number;
       sessionStatus: "IN_PROGRESS";
+      checkout: RecoveryCheckoutInstructions;
     }
   | {
       started: false;
@@ -86,6 +98,9 @@ export type RunPaymentRecoveryDeps = {
   startAuthorized: (
     input: StartAuthorizedRecoveryInput,
   ) => Promise<StartRecoveryAttemptResult>;
+  loadCheckoutOrder: (
+    orderId: string,
+  ) => Promise<RecoveryCheckoutOrder | null>;
 };
 
 const defaultDeps: RunPaymentRecoveryDeps = {
@@ -96,6 +111,7 @@ const defaultDeps: RunPaymentRecoveryDeps = {
   evaluatePolicy: evaluateRecoveryPolicy,
   persistDecision: persistRecoveryGateDecision,
   startAuthorized: startAuthorizedRecovery,
+  loadCheckoutOrder: loadRecoveryCheckoutOrder,
 };
 
 function stopped(
@@ -226,6 +242,28 @@ export async function runPaymentRecovery(
     });
   }
 
+  const lateVerification = await deps.verifyPaymentState(razorpayPaymentId);
+
+  if (
+    !lateVerification.verified ||
+    lateVerification.guardianState !== "FAILED" ||
+    lateVerification.failureCategory !== "GENERIC_PAYMENT_FAILED"
+  ) {
+    return stopped("RECOVERY_STATE_CHANGED", {
+      recoverySessionId: started.recoverySessionId,
+      decisionId: started.decisionId,
+    });
+  }
+
+  const checkoutOrder = await deps.loadCheckoutOrder(context.orderId);
+
+  if (!checkoutOrder) {
+    return stopped("RECOVERY_STATE_CHANGED", {
+      recoverySessionId: started.recoverySessionId,
+      decisionId: started.decisionId,
+    });
+  }
+
   return {
     started: true,
     recoverySessionId: started.recoverySessionId,
@@ -233,5 +271,10 @@ export async function runPaymentRecovery(
     action: "REOPEN_CHECKOUT",
     attemptCount: started.attemptCount,
     sessionStatus: "IN_PROGRESS",
+    checkout: {
+      orderId: checkoutOrder.razorpayOrderId,
+      amount: checkoutOrder.amount,
+      currency: checkoutOrder.currency,
+    },
   };
 }

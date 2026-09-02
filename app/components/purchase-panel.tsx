@@ -7,6 +7,8 @@ import {
   RECOVER_PAYMENT_NOT_FOUND_RETRY_DELAY_MS,
   shouldRetryRecoverPayment,
   type RecoverPaymentClientOutcome,
+  type RecoverPaymentClientResult,
+  type RecoveryCheckoutInstructions,
 } from "@/lib/payments/interpret-recover-payment-client";
 import {
   loadRazorpayCheckout,
@@ -88,7 +90,7 @@ export default function PurchasePanel() {
 
   async function postRecoverPayment(
     razorpayPaymentId: string,
-  ): Promise<RecoverPaymentClientOutcome> {
+  ): Promise<RecoverPaymentClientResult> {
     try {
       const response = await fetch("/api/payments/recover", {
         method: "POST",
@@ -98,28 +100,65 @@ export default function PurchasePanel() {
       const payload: unknown = await response.json().catch(() => null);
       return interpretRecoverPaymentHttpResponse(response.status, payload);
     } catch {
-      return "unsafe";
+      return { outcome: "unsafe" };
+    }
+  }
+
+  async function openRecoveryCheckout(checkout: RecoveryCheckoutInstructions) {
+    const keyId = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID;
+
+    if (!keyId) {
+      setPaymentFailedMessage(RECOVERY_UNSAFE_MESSAGE);
+      return;
+    }
+
+    try {
+      const RazorpayCheckout = await loadRazorpayCheckout();
+      const recoveryCheckout = new RazorpayCheckout({
+        key: keyId,
+        amount: checkout.amount,
+        currency: checkout.currency,
+        name: "Auralis",
+        description: "Premium Headphones",
+        order_id: checkout.orderId,
+        theme: { color: "#8a4b1f" },
+        handler(payment) {
+          void verifyPayment(payment);
+        },
+      });
+
+      recoveryCheckout.on("payment.failed", () => {
+        setPaymentFailedMessage(RECOVERY_NOT_AUTHORIZED_MESSAGE);
+      });
+
+      recoveryCheckout.open();
+    } catch {
+      setPaymentFailedMessage(RECOVERY_UNSAFE_MESSAGE);
     }
   }
 
   async function runRecoverPaymentWorkflow(razorpayPaymentId: string) {
-    let outcome: RecoverPaymentClientOutcome = "unsafe";
+    let result: RecoverPaymentClientResult = { outcome: "unsafe" };
 
     for (
       let attempt = 1;
       attempt <= RECOVER_PAYMENT_NOT_FOUND_MAX_ATTEMPTS;
       attempt += 1
     ) {
-      outcome = await postRecoverPayment(razorpayPaymentId);
+      result = await postRecoverPayment(razorpayPaymentId);
 
-      if (!shouldRetryRecoverPayment(outcome, attempt)) {
+      if (!shouldRetryRecoverPayment(result.outcome, attempt)) {
         break;
       }
 
       await wait(RECOVER_PAYMENT_NOT_FOUND_RETRY_DELAY_MS);
     }
 
-    setPaymentFailedMessage(messageForRecoverOutcome(outcome));
+    setPaymentFailedMessage(messageForRecoverOutcome(result.outcome));
+
+    if (result.outcome === "started") {
+      void openRecoveryCheckout(result.checkout);
+    }
   }
 
   function decreaseQuantity() {

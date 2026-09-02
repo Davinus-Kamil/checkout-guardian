@@ -19,6 +19,13 @@ const PAYMENT_ID = "pay_internal_1";
 const ORDER_ID = "ord_internal_1";
 const SESSION_ID = "rsess_1";
 const DECISION_ID = "dec_1";
+const RAZORPAY_ORDER_ID = "order_original";
+
+const checkoutOrder = {
+  razorpayOrderId: RAZORPAY_ORDER_ID,
+  amount: 349900,
+  currency: "INR",
+};
 
 const failedFacts = {
   normalizedStatus: "failed" as const,
@@ -131,6 +138,11 @@ function createDeps(
         sessionStatus: "IN_PROGRESS",
       };
     },
+    loadCheckoutOrder: async (orderId) => {
+      calls.push("checkoutOrder");
+      assert.equal(orderId, ORDER_ID);
+      return checkoutOrder;
+    },
     ...overrides,
     calls,
   } as RunPaymentRecoveryDeps & { calls: string[] };
@@ -155,6 +167,7 @@ test("1. M10 verified false stops immediately", async () => {
     evaluatePolicy: unused,
     persistDecision: unused,
     startAuthorized: unused,
+    loadCheckoutOrder: unused,
   });
 
   assert.deepEqual(result, { started: false, reason: "FETCH_FAILED" });
@@ -300,6 +313,11 @@ test("5. recoverable failure + ALLOW persists then starts in order", async () =>
     action: "REOPEN_CHECKOUT",
     attemptCount: 1,
     sessionStatus: "IN_PROGRESS",
+    checkout: {
+      orderId: RAZORPAY_ORDER_ID,
+      amount: 349900,
+      currency: "INR",
+    },
   });
   assert.deepEqual(calls, [
     "verify",
@@ -309,6 +327,8 @@ test("5. recoverable failure + ALLOW persists then starts in order", async () =>
     "gate",
     "persist",
     "start",
+    "verify",
+    "checkoutOrder",
   ]);
   assert.equal(recoveryHttpStatus(result), 200);
 });
@@ -481,6 +501,7 @@ test("11. M13 attemptCount comes from the context loader", async () => {
 test("12. request parser ignores client action/policy/session/Decision IDs", () => {
   const parsed = parseRecoverPaymentBody({
     razorpay_payment_id: RAZORPAY_PAYMENT_ID,
+    order_id: "order_from_browser",
     action: "REOPEN_CHECKOUT",
     policy: { maxRecoveryAttempts: 99 },
     recoverySessionId: "client_session",
@@ -493,6 +514,7 @@ test("12. request parser ignores client action/policy/session/Decision IDs", () 
     razorpayPaymentId: RAZORPAY_PAYMENT_ID,
   });
   assert.equal("action" in parsed, false);
+  assert.equal("order_id" in parsed, false);
 });
 
 test("13. unexpected dependency throw is not converted into success", async () => {
@@ -508,9 +530,163 @@ test("13. unexpected dependency throw is not converted into success", async () =
         evaluatePolicy: unused,
         persistDecision: unused,
         startAuthorized: unused,
+        loadCheckoutOrder: unused,
       }),
     /razorpay down/,
   );
+});
+
+test("late M10 SUCCESS does not return Checkout instructions", async () => {
+  let verifies = 0;
+  const calls: string[] = [];
+  const result = await runPaymentRecovery(
+    RAZORPAY_PAYMENT_ID,
+    createDeps({
+      calls,
+      verifyPaymentState: async () => {
+        verifies += 1;
+        calls.push(verifies === 1 ? "verify" : "late-verify");
+        if (verifies === 1) {
+          return recoverableVerification;
+        }
+        return {
+          verified: true,
+          razorpayPaymentId: RAZORPAY_PAYMENT_ID,
+          gatewayStatus: "captured",
+          facts: {
+            normalizedStatus: "captured",
+            paymentMethod: "card",
+            errorCode: null,
+            errorReason: null,
+            isCaptured: true,
+            isFailed: false,
+          },
+          guardianState: "SUCCESS",
+          failureCategory: null,
+        };
+      },
+      loadCheckoutOrder: unused,
+    }),
+  );
+
+  assert.deepEqual(result, {
+    started: false,
+    reason: "RECOVERY_STATE_CHANGED",
+    recoverySessionId: SESSION_ID,
+    decisionId: DECISION_ID,
+  });
+  assert.equal("checkout" in result, false);
+  assert.equal(calls.includes("start"), true);
+  assert.equal(calls.includes("checkoutOrder"), false);
+});
+
+test("late M10 UNRESOLVED does not return Checkout instructions", async () => {
+  let verifies = 0;
+  const result = await runPaymentRecovery(
+    RAZORPAY_PAYMENT_ID,
+    createDeps({
+      verifyPaymentState: async () => {
+        verifies += 1;
+        if (verifies === 1) {
+          return recoverableVerification;
+        }
+        return {
+          verified: true,
+          razorpayPaymentId: RAZORPAY_PAYMENT_ID,
+          gatewayStatus: "authorized",
+          facts: {
+            normalizedStatus: "unknown",
+            paymentMethod: "card",
+            errorCode: null,
+            errorReason: null,
+            isCaptured: false,
+            isFailed: false,
+          },
+          guardianState: "UNRESOLVED",
+          failureCategory: null,
+        };
+      },
+      loadCheckoutOrder: unused,
+    }),
+  );
+
+  assert.deepEqual(result, {
+    started: false,
+    reason: "RECOVERY_STATE_CHANGED",
+    recoverySessionId: SESSION_ID,
+    decisionId: DECISION_ID,
+  });
+  assert.equal("checkout" in result, false);
+});
+
+test("late M10 UNKNOWN does not return Checkout instructions", async () => {
+  let verifies = 0;
+  const result = await runPaymentRecovery(
+    RAZORPAY_PAYMENT_ID,
+    createDeps({
+      verifyPaymentState: async () => {
+        verifies += 1;
+        if (verifies === 1) {
+          return recoverableVerification;
+        }
+        return {
+          verified: true,
+          razorpayPaymentId: RAZORPAY_PAYMENT_ID,
+          gatewayStatus: "failed",
+          facts: {
+            normalizedStatus: "failed",
+            paymentMethod: "card",
+            errorCode: null,
+            errorReason: null,
+            isCaptured: false,
+            isFailed: true,
+          },
+          guardianState: "FAILED",
+          failureCategory: "UNKNOWN",
+        };
+      },
+      loadCheckoutOrder: unused,
+    }),
+  );
+
+  assert.deepEqual(result, {
+    started: false,
+    reason: "RECOVERY_STATE_CHANGED",
+    recoverySessionId: SESSION_ID,
+    decisionId: DECISION_ID,
+  });
+  assert.equal("checkout" in result, false);
+});
+
+test("late M10 fetch failure does not return Checkout instructions", async () => {
+  let verifies = 0;
+  const result = await runPaymentRecovery(
+    RAZORPAY_PAYMENT_ID,
+    createDeps({
+      verifyPaymentState: async () => {
+        verifies += 1;
+        if (verifies === 1) {
+          return recoverableVerification;
+        }
+        return {
+          verified: false,
+          razorpayPaymentId: RAZORPAY_PAYMENT_ID,
+          guardianState: "UNRESOLVED",
+          failureCategory: null,
+          reason: "FETCH_FAILED",
+        };
+      },
+      loadCheckoutOrder: unused,
+    }),
+  );
+
+  assert.deepEqual(result, {
+    started: false,
+    reason: "RECOVERY_STATE_CHANGED",
+    recoverySessionId: SESSION_ID,
+    decisionId: DECISION_ID,
+  });
+  assert.equal("checkout" in result, false);
 });
 
 test("HTTP mapping: malformed/blank body and INVALID_PAYMENT_ID are 400", () => {
@@ -529,5 +705,9 @@ test("HTTP mapping: malformed/blank body and INVALID_PAYMENT_ID are 400", () => 
   assert.equal(
     recoveryHttpStatus({ started: false, reason: "INTERNAL_ERROR" }),
     500,
+  );
+  assert.equal(
+    recoveryHttpStatus({ started: false, reason: "RECOVERY_STATE_CHANGED" }),
+    200,
   );
 });
