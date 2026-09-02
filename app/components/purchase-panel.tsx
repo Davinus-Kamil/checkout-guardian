@@ -1,6 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import {
+  interpretRecoverPaymentHttpResponse,
+  RECOVER_PAYMENT_NOT_FOUND_MAX_ATTEMPTS,
+  RECOVER_PAYMENT_NOT_FOUND_RETRY_DELAY_MS,
+  shouldRetryRecoverPayment,
+  type RecoverPaymentClientOutcome,
+} from "@/lib/payments/interpret-recover-payment-client";
 import {
   loadRazorpayCheckout,
   type RazorpayCheckoutResponse,
@@ -9,6 +16,19 @@ import {
 
 const MIN_QUANTITY = 1;
 const MAX_QUANTITY = 5;
+
+const CHECKING_RECOVERY_MESSAGE =
+  "Payment failed. Guardian is checking whether it is safe to recover.";
+const AUTHORIZED_RECOVERY_MESSAGE =
+  "Guardian verified this failure and authorized a safe recovery attempt.";
+const LOCAL_PAYMENT_MISSING_MESSAGE =
+  "Payment failed. Guardian could not verify the local payment record yet. Please wait before trying again.";
+const RECOVERY_NOT_AUTHORIZED_MESSAGE =
+  "Payment failed. Guardian did not authorize another payment attempt.";
+const RECOVERY_UNSAFE_MESSAGE =
+  "Payment failed. Guardian could not safely verify recovery. Please do not pay again yet.";
+const UNIDENTIFIED_PAYMENT_MESSAGE =
+  "This payment could not be identified. Guardian still needs a verified payment identity before recovery can be considered.";
 
 type CreatedOrder = {
   id: string;
@@ -28,6 +48,7 @@ export default function PurchasePanel() {
   const [paymentFailedMessage, setPaymentFailedMessage] = useState<
     string | null
   >(null);
+  const handledFailedPaymentIds = useRef(new Set<string>());
 
   function readFailedPaymentId(
     response: RazorpayPaymentFailedEvent,
@@ -39,6 +60,66 @@ export default function PurchasePanel() {
     }
 
     return paymentId.trim();
+  }
+
+  function wait(ms: number) {
+    return new Promise<void>((resolve) => {
+      setTimeout(resolve, ms);
+    });
+  }
+
+  function messageForRecoverOutcome(
+    outcome: RecoverPaymentClientOutcome,
+  ): string {
+    if (outcome === "started") {
+      return AUTHORIZED_RECOVERY_MESSAGE;
+    }
+
+    if (outcome === "payment_not_found") {
+      return LOCAL_PAYMENT_MISSING_MESSAGE;
+    }
+
+    if (outcome === "denied") {
+      return RECOVERY_NOT_AUTHORIZED_MESSAGE;
+    }
+
+    return RECOVERY_UNSAFE_MESSAGE;
+  }
+
+  async function postRecoverPayment(
+    razorpayPaymentId: string,
+  ): Promise<RecoverPaymentClientOutcome> {
+    try {
+      const response = await fetch("/api/payments/recover", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ razorpay_payment_id: razorpayPaymentId }),
+      });
+      const payload: unknown = await response.json().catch(() => null);
+      return interpretRecoverPaymentHttpResponse(response.status, payload);
+    } catch {
+      return "unsafe";
+    }
+  }
+
+  async function runRecoverPaymentWorkflow(razorpayPaymentId: string) {
+    let outcome: RecoverPaymentClientOutcome = "unsafe";
+
+    for (
+      let attempt = 1;
+      attempt <= RECOVER_PAYMENT_NOT_FOUND_MAX_ATTEMPTS;
+      attempt += 1
+    ) {
+      outcome = await postRecoverPayment(razorpayPaymentId);
+
+      if (!shouldRetryRecoverPayment(outcome, attempt)) {
+        break;
+      }
+
+      await wait(RECOVER_PAYMENT_NOT_FOUND_RETRY_DELAY_MS);
+    }
+
+    setPaymentFailedMessage(messageForRecoverOutcome(outcome));
   }
 
   function decreaseQuantity() {
@@ -112,16 +193,19 @@ export default function PurchasePanel() {
 
         if (!capturedPaymentId) {
           setFailedPaymentId(null);
-          setPaymentFailedMessage(
-            "This payment could not be identified. Guardian still needs a verified payment identity before recovery can be considered.",
-          );
+          setPaymentFailedMessage(UNIDENTIFIED_PAYMENT_MESSAGE);
           return;
         }
 
+        if (handledFailedPaymentIds.current.has(capturedPaymentId)) {
+          return;
+        }
+
+        handledFailedPaymentIds.current.add(capturedPaymentId);
+
         setFailedPaymentId(capturedPaymentId);
-        setPaymentFailedMessage(
-          "Payment failed. Guardian is checking whether it is safe to recover.",
-        );
+        setPaymentFailedMessage(CHECKING_RECOVERY_MESSAGE);
+        void runRecoverPaymentWorkflow(capturedPaymentId);
       });
 
       checkout.open();
