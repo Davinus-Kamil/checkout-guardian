@@ -6,6 +6,13 @@ const ORDER_AMOUNT_PAISE = 349900;
 const CURRENCY = "INR";
 const DEMO_MERCHANT_ID = "demo_checkout_guardian_merchant";
 const DEMO_MERCHANT_NAME = "Checkout Guardian Demo Merchant";
+const DEMO_MERCHANT_POLICY = {
+  requireConfirmedFailure: true,
+  maxRecoveryAttempts: 1,
+  allowAlternativeMethod: true,
+  unknownStateAction: "BLOCK",
+  riskFailureAction: "BLOCK",
+} as const;
 
 export const runtime = "nodejs";
 
@@ -26,6 +33,15 @@ export async function POST() {
       create: {
         id: DEMO_MERCHANT_ID,
         name: DEMO_MERCHANT_NAME,
+      },
+    });
+
+    await prisma.merchantPolicy.upsert({
+      where: { merchantId: DEMO_MERCHANT_ID },
+      update: { ...DEMO_MERCHANT_POLICY },
+      create: {
+        merchantId: DEMO_MERCHANT_ID,
+        ...DEMO_MERCHANT_POLICY,
       },
     });
 
