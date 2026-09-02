@@ -6,6 +6,15 @@ export type RazorpayCheckoutResponse = {
   razorpay_signature: string;
 };
 
+export type RazorpayPaymentFailedEvent = {
+  error?: {
+    metadata?: {
+      payment_id?: string;
+      order_id?: string;
+    };
+  };
+};
+
 type RazorpayCheckoutOptions = {
   key: string;
   amount: number | string;
@@ -19,7 +28,11 @@ type RazorpayCheckoutOptions = {
 
 type RazorpayCheckoutInstance = {
   open: () => void;
-  on: (event: string, handler: (response: unknown) => void) => void;
+  on(
+    event: "payment.failed",
+    handler: (response: RazorpayPaymentFailedEvent) => void,
+  ): void;
+  on(event: string, handler: (response: unknown) => void): void;
 };
 
 type RazorpayCheckoutConstructor = new (

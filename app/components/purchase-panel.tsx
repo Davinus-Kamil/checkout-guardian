@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
   loadRazorpayCheckout,
   type RazorpayCheckoutResponse,
+  type RazorpayPaymentFailedEvent,
 } from "@/lib/razorpay/load-checkout";
 
 const MIN_QUANTITY = 1;
@@ -23,6 +24,22 @@ export default function PurchasePanel() {
   const [verificationMessage, setVerificationMessage] = useState<string | null>(
     null,
   );
+  const [failedPaymentId, setFailedPaymentId] = useState<string | null>(null);
+  const [paymentFailedMessage, setPaymentFailedMessage] = useState<
+    string | null
+  >(null);
+
+  function readFailedPaymentId(
+    response: RazorpayPaymentFailedEvent,
+  ): string | null {
+    const paymentId = response.error?.metadata?.payment_id;
+
+    if (typeof paymentId !== "string" || !paymentId.trim()) {
+      return null;
+    }
+
+    return paymentId.trim();
+  }
 
   function decreaseQuantity() {
     setQuantity((current) => Math.max(MIN_QUANTITY, current - 1));
@@ -35,6 +52,8 @@ export default function PurchasePanel() {
   async function handleBuyNow() {
     setErrorMessage(null);
     setVerificationMessage(null);
+    setFailedPaymentId(null);
+    setPaymentFailedMessage(null);
     setIsStartingCheckout(true);
 
     try {
@@ -86,6 +105,23 @@ export default function PurchasePanel() {
         handler(payment) {
           void verifyPayment(payment);
         },
+      });
+
+      checkout.on("payment.failed", (response) => {
+        const capturedPaymentId = readFailedPaymentId(response);
+
+        if (!capturedPaymentId) {
+          setFailedPaymentId(null);
+          setPaymentFailedMessage(
+            "This payment could not be identified. Guardian still needs a verified payment identity before recovery can be considered.",
+          );
+          return;
+        }
+
+        setFailedPaymentId(capturedPaymentId);
+        setPaymentFailedMessage(
+          "Payment failed. Guardian is checking whether it is safe to recover.",
+        );
       });
 
       checkout.open();
@@ -181,6 +217,16 @@ export default function PurchasePanel() {
       {errorMessage ? (
         <p role="alert" className="text-sm leading-6 text-accent">
           {errorMessage}
+        </p>
+      ) : null}
+
+      {paymentFailedMessage ? (
+        <p
+          role="status"
+          className="text-sm leading-6 text-muted"
+          data-failed-payment-captured={failedPaymentId ? "true" : "false"}
+        >
+          {paymentFailedMessage}
         </p>
       ) : null}
 
