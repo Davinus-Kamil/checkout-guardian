@@ -10,6 +10,7 @@ const PAYMENT_ID = "pay_checkout_success";
 const RECOVERY_PAYMENT_ID = "pay_recovery_success";
 const ORDER_ID = "order_original";
 const INTERNAL_ORDER_ID = "ord_internal_1";
+const INTERNAL_PAYMENT_ID = "pay_internal";
 const SIGNATURE = "sig_valid";
 
 const capturedFacts = {
@@ -34,6 +35,13 @@ function unused(): never {
   throw new Error("unexpected call");
 }
 
+function notRecovery(): Promise<{
+  finalized: false;
+  reason: "NOT_RECOVERY";
+}> {
+  return Promise.resolve({ finalized: false, reason: "NOT_RECOVERY" });
+}
+
 function createStore(options?: {
   order?: { id: string } | null;
   onUpsert?: (args: unknown) => void;
@@ -51,7 +59,7 @@ function createStore(options?: {
     payment: {
       upsert: async (args) => {
         options?.onUpsert?.(args);
-        return { id: "pay_internal" };
+        return { id: INTERNAL_PAYMENT_ID };
       },
     },
   };
@@ -81,6 +89,7 @@ test("1. valid signature + M10 SUCCESS persists Payment and returns verified", a
     store: createStore({
       onUpsert: (args) => upserts.push(args),
     }),
+    finalizeRecovery: notRecovery,
   });
 
   assert.deepEqual(result, { verified: true });
@@ -117,6 +126,7 @@ test("2. valid signature + M10 verified false fails closed with no persist", asy
         upserts += 1;
       },
     }),
+    finalizeRecovery: unused,
   });
 
   assert.deepEqual(result, { verified: false, httpStatus: 400 });
@@ -147,6 +157,7 @@ test("3. valid signature + M10 FAILED fails closed with no persist", async () =>
         upserts += 1;
       },
     }),
+    finalizeRecovery: unused,
   });
 
   assert.deepEqual(result, { verified: false, httpStatus: 400 });
@@ -177,6 +188,7 @@ test("4. valid signature + M10 UNRESOLVED fails closed with no persist", async (
         upserts += 1;
       },
     }),
+    finalizeRecovery: unused,
   });
 
   assert.deepEqual(result, { verified: false, httpStatus: 400 });
@@ -191,6 +203,7 @@ test("5. invalid Checkout signature is rejected before M10 and persist", async (
       order: { findUnique: unused },
       payment: { upsert: unused },
     },
+    finalizeRecovery: unused,
   });
 
   assert.deepEqual(result, { verified: false, httpStatus: 400 });
@@ -206,6 +219,7 @@ test("6. webhook-first upsert updates only guardianState SUCCESS", async () => {
         upserts.push(args as { update: { guardianState: "SUCCESS" } });
       },
     }),
+    finalizeRecovery: notRecovery,
   });
 
   assert.deepEqual(result, { verified: true });
@@ -231,6 +245,7 @@ test("7. verify-first recovery pay_* creates exactly one Payment upsert", async 
         paymentIds.push(typed.where.razorpayPaymentId);
       },
     }),
+    finalizeRecovery: notRecovery,
   });
 
   assert.deepEqual(result, { verified: true });
@@ -253,10 +268,15 @@ test("8. initial successful Checkout uses the same M10 SUCCESS path", async () =
         calls.push("persist");
       },
     }),
+    finalizeRecovery: async () => {
+      calls.push("finalize");
+      return { finalized: false, reason: "NOT_RECOVERY" };
+    },
   });
 
   assert.deepEqual(result, { verified: true });
-  assert.deepEqual(calls, ["signature", "m10", "persist"]);
+  assert.equal("recovery" in result, false);
+  assert.deepEqual(calls, ["signature", "m10", "persist", "finalize"]);
 });
 
 test("missing Checkout fields keep existing 400 error", async () => {
@@ -269,6 +289,7 @@ test("missing Checkout fields keep existing 400 error", async () => {
         order: { findUnique: unused },
         payment: { upsert: unused },
       },
+      finalizeRecovery: unused,
     },
   );
 
@@ -289,6 +310,7 @@ test("unknown local Order fails after valid signature without M10 persist", asyn
       return successVerification;
     },
     store: createStore({ order: null }),
+    finalizeRecovery: unused,
   });
 
   assert.deepEqual(result, {
@@ -297,4 +319,57 @@ test("unknown local Order fails after valid signature without M10 persist", asyn
     error: "Failed to verify payment",
   });
   assert.equal(m10, 0);
+});
+
+test("13. finalized recovery is attached after persist using internal ids", async () => {
+  let finalizeInput: { orderId: string; successfulPaymentId: string } | null =
+    null;
+  const result = await confirmCheckoutPayment(
+    {
+      ...validPayload(),
+      recoveredAmount: 1,
+      outcome: "RECOVERED",
+    },
+    {
+      verifySignature: () => true,
+      verifyPaymentState: async () => successVerification,
+      store: createStore(),
+      finalizeRecovery: async (input) => {
+        finalizeInput = input;
+        return {
+          finalized: true,
+          recoveredAmount: 349900,
+          currency: "INR",
+        };
+      },
+    },
+  );
+
+  assert.deepEqual(finalizeInput, {
+    orderId: INTERNAL_ORDER_ID,
+    successfulPaymentId: INTERNAL_PAYMENT_ID,
+  });
+  assert.deepEqual(result, {
+    verified: true,
+    recovery: {
+      finalized: true,
+      recoveredAmount: 349900,
+      currency: "INR",
+    },
+  });
+});
+
+test("ambiguous recovery finalization does not claim recovered revenue", async () => {
+  const result = await confirmCheckoutPayment(validPayload(), {
+    verifySignature: () => true,
+    verifyPaymentState: async () => successVerification,
+    store: createStore(),
+    finalizeRecovery: async () => ({
+      finalized: false,
+      reason: "AMBIGUOUS",
+    }),
+  });
+
+  assert.deepEqual(result, { verified: true });
+  assert.equal("recovery" in result, false);
 });

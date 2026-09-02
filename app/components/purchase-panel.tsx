@@ -10,6 +10,7 @@ import {
   type RecoverPaymentClientResult,
   type RecoveryCheckoutInstructions,
 } from "@/lib/payments/interpret-recover-payment-client";
+import { messageForVerifiedCheckoutPayment } from "@/lib/payments/interpret-verify-payment-client";
 import {
   loadRazorpayCheckout,
   type RazorpayCheckoutResponse,
@@ -285,7 +286,9 @@ export default function PurchasePanel() {
         throw new Error("Payment could not be verified. Please try again.");
       }
 
-      setVerificationMessage("Payment verified successfully");
+      setPaymentFailedMessage(null);
+      setFailedPaymentId(null);
+      setVerificationMessage(messageForVerifiedCheckoutPayment(payload));
     } catch (error) {
       setErrorMessage(
         error instanceof Error

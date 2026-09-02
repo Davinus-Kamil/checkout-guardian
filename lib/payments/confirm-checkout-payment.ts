@@ -1,4 +1,8 @@
 import {
+  finalizeAuthorizedRecovery,
+  type FinalizeAuthorizedRecoveryResult,
+} from "./finalize-authorized-recovery.ts";
+import {
   verifyRazorpayPaymentState,
   type PaymentVerificationResult,
 } from "./verify-razorpay-payment-state.ts";
@@ -6,6 +10,11 @@ import {
 export type ConfirmCheckoutPaymentResult =
   | {
       verified: true;
+      recovery?: {
+        finalized: true;
+        recoveredAmount: number;
+        currency: string;
+      };
     }
   | {
       verified: false;
@@ -37,7 +46,7 @@ export type ConfirmCheckoutPaymentStore = {
         errorCode: null;
         errorReason: null;
       };
-    }) => Promise<unknown>;
+    }) => Promise<{ id: string }>;
   };
 };
 
@@ -51,6 +60,10 @@ export type ConfirmCheckoutPaymentDeps = {
     razorpayPaymentId: string,
   ) => Promise<PaymentVerificationResult>;
   store: ConfirmCheckoutPaymentStore;
+  finalizeRecovery: (input: {
+    orderId: string;
+    successfulPaymentId: string;
+  }) => Promise<FinalizeAuthorizedRecoveryResult>;
 };
 
 function readStringField(payload: unknown, key: string) {
@@ -127,7 +140,7 @@ export async function confirmCheckoutPayment(
     return rejected(400);
   }
 
-  await store.payment.upsert({
+  const persisted = await store.payment.upsert({
     where: { razorpayPaymentId: paymentId },
     update: {
       guardianState: "SUCCESS",
@@ -143,6 +156,23 @@ export async function confirmCheckoutPayment(
       errorReason: null,
     },
   });
+
+  const finalizeRecovery = deps?.finalizeRecovery ?? finalizeAuthorizedRecovery;
+  const finalization = await finalizeRecovery({
+    orderId: order.id,
+    successfulPaymentId: persisted.id,
+  });
+
+  if (finalization.finalized) {
+    return {
+      verified: true,
+      recovery: {
+        finalized: true,
+        recoveredAmount: finalization.recoveredAmount,
+        currency: finalization.currency,
+      },
+    };
+  }
 
   return { verified: true };
 }

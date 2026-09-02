@@ -8,7 +8,7 @@ export async function POST(request: Request) {
     const result = await confirmCheckoutPayment(payload);
 
     if (result.verified) {
-      return Response.json({ verified: true }, { status: 200 });
+      return Response.json(result, { status: 200 });
     }
 
     return Response.json(
