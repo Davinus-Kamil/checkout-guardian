@@ -11,6 +11,7 @@ import {
   runPaymentRecovery,
   type RunPaymentRecoveryDeps,
 } from "./run-payment-recovery.ts";
+import { evaluateRecoveryPolicy } from "./evaluate-recovery-policy.ts";
 import type { StartRecoveryAttemptResult } from "./start-authorized-recovery.ts";
 import type { PaymentVerificationResult } from "./verify-razorpay-payment-state.ts";
 
@@ -512,9 +513,12 @@ test("12. request parser ignores client action/policy/session/Decision IDs", () 
   assert.deepEqual(parsed, {
     ok: true,
     razorpayPaymentId: RAZORPAY_PAYMENT_ID,
+    simulateUnresolvedGuardian: false,
   });
   assert.equal("action" in parsed, false);
   assert.equal("order_id" in parsed, false);
+  assert.equal("guardianState" in parsed, false);
+  assert.equal("gatewayStatus" in parsed, false);
 });
 
 test("13. unexpected dependency throw is not converted into success", async () => {
@@ -710,4 +714,170 @@ test("HTTP mapping: malformed/blank body and INVALID_PAYMENT_ID are 400", () => 
     recoveryHttpStatus({ started: false, reason: "RECOVERY_STATE_CHANGED" }),
     200,
   );
+});
+
+test("parser accepts simulate_unresolved_guardian only as boolean true", () => {
+  assert.deepEqual(
+    parseRecoverPaymentBody({
+      razorpay_payment_id: RAZORPAY_PAYMENT_ID,
+      simulate_unresolved_guardian: true,
+    }),
+    {
+      ok: true,
+      razorpayPaymentId: RAZORPAY_PAYMENT_ID,
+      simulateUnresolvedGuardian: true,
+    },
+  );
+  assert.deepEqual(
+    parseRecoverPaymentBody({
+      razorpay_payment_id: RAZORPAY_PAYMENT_ID,
+      simulate_unresolved_guardian: "true",
+      guardianState: "UNRESOLVED",
+      gatewayStatus: "authorized",
+      failureCategory: "GENERIC_PAYMENT_FAILED",
+    }),
+    {
+      ok: true,
+      razorpayPaymentId: RAZORPAY_PAYMENT_ID,
+      simulateUnresolvedGuardian: false,
+    },
+  );
+});
+
+test("A. Scenario B simulation after verified M10 BLOCKs without start or checkout", async () => {
+  const calls: string[] = [];
+  const persistInputs: unknown[] = [];
+  const result = await runPaymentRecovery(
+    RAZORPAY_PAYMENT_ID,
+    createDeps({
+      calls,
+      deriveEligibility: unused,
+      proposeAction: unused,
+      evaluatePolicy: (input) => {
+        calls.push("gate");
+        assert.equal(input.proposal.proposed, true);
+        if (input.proposal.proposed) {
+          assert.equal(input.proposal.guardianState, "UNRESOLVED");
+          assert.equal(input.proposal.failureCategory, null);
+          assert.equal(input.proposal.action, "REOPEN_CHECKOUT");
+        }
+        return evaluateRecoveryPolicy(input);
+      },
+      persistDecision: async (input) => {
+        calls.push("persist");
+        persistInputs.push(input);
+        return {
+          persisted: true,
+          recoverySessionId: SESSION_ID,
+          decisionId: DECISION_ID,
+          policyResult: "BLOCK",
+          policyReason: "CONFIRMED_FAILURE_REQUIRED",
+        };
+      },
+      startAuthorized: unused,
+      loadCheckoutOrder: unused,
+    }),
+    { simulateUnresolvedGuardian: true },
+  );
+
+  assert.deepEqual(result, {
+    started: false,
+    reason: "CONFIRMED_FAILURE_REQUIRED",
+    recoverySessionId: SESSION_ID,
+    decisionId: DECISION_ID,
+    policyResult: "BLOCK",
+  });
+  assert.equal("checkout" in result, false);
+  assert.deepEqual(calls, ["verify", "context", "gate", "persist"]);
+  assert.equal(calls.includes("eligibility"), false);
+  assert.equal(calls.includes("propose"), false);
+  assert.equal(calls.includes("start"), false);
+  const persisted = persistInputs[0] as {
+    proposal: RecoveryProposalResult;
+    gate: PolicyGateResult;
+  };
+  assert.equal(persisted.proposal.guardianState, "UNRESOLVED");
+  assert.equal(persisted.proposal.failureCategory, null);
+  assert.equal(persisted.gate.reason, "CONFIRMED_FAILURE_REQUIRED");
+});
+
+test("D. ordinary verified UNRESOLVED without simulation still stops at M11", async () => {
+  const calls: string[] = [];
+  const result = await runPaymentRecovery(
+    RAZORPAY_PAYMENT_ID,
+    createDeps({
+      calls,
+      verifyPaymentState: async () => {
+        calls.push("verify");
+        return {
+          verified: true,
+          razorpayPaymentId: RAZORPAY_PAYMENT_ID,
+          gatewayStatus: "authorized",
+          facts: {
+            normalizedStatus: "unknown",
+            paymentMethod: "card",
+            errorCode: null,
+            errorReason: null,
+            isCaptured: false,
+            isFailed: false,
+          },
+          guardianState: "UNRESOLVED",
+          failureCategory: null,
+        };
+      },
+      deriveEligibility: (verification) => {
+        calls.push("eligibility");
+        assert.equal(verification.guardianState, "UNRESOLVED");
+        return {
+          eligible: false,
+          guardianState: "UNRESOLVED",
+          failureCategory: null,
+          reason: "UNRESOLVED_STATE",
+        };
+      },
+      proposeAction: unused,
+      persistDecision: unused,
+      startAuthorized: unused,
+    }),
+  );
+
+  assert.deepEqual(result, {
+    started: false,
+    reason: "UNRESOLVED_STATE",
+  });
+  assert.deepEqual(calls, ["verify", "eligibility"]);
+  assert.equal(calls.includes("propose"), false);
+  assert.equal(calls.includes("persist"), false);
+  assert.equal(calls.includes("start"), false);
+});
+
+test("E. M10 failure with simulation requested is still a verification failure", async () => {
+  const calls: string[] = [];
+  const result = await runPaymentRecovery(
+    RAZORPAY_PAYMENT_ID,
+    {
+      verifyPaymentState: async () => {
+        calls.push("verify");
+        return {
+          verified: false,
+          razorpayPaymentId: RAZORPAY_PAYMENT_ID,
+          guardianState: "UNRESOLVED",
+          failureCategory: null,
+          reason: "FETCH_FAILED",
+        };
+      },
+      deriveEligibility: unused,
+      proposeAction: unused,
+      loadContext: unused,
+      evaluatePolicy: unused,
+      persistDecision: unused,
+      startAuthorized: unused,
+      loadCheckoutOrder: unused,
+    },
+    { simulateUnresolvedGuardian: true },
+  );
+
+  assert.deepEqual(result, { started: false, reason: "FETCH_FAILED" });
+  assert.notEqual(result.reason, "CONFIRMED_FAILURE_REQUIRED");
+  assert.deepEqual(calls, ["verify"]);
 });

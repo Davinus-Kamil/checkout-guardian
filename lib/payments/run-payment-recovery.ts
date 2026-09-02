@@ -129,21 +129,44 @@ function stopped(
   };
 }
 
+export type RunPaymentRecoveryOptions = {
+  simulateUnresolvedGuardian?: boolean;
+};
+
+export type ParseRecoverPaymentBodyResult =
+  | {
+      ok: true;
+      razorpayPaymentId: string;
+      simulateUnresolvedGuardian: boolean;
+    }
+  | { ok: false };
+
+const consideredUnresolvedProposal: RecoveryProposalResult = {
+  proposed: true,
+  action: "REOPEN_CHECKOUT",
+  guardianState: "UNRESOLVED",
+  failureCategory: null,
+};
+
 export function parseRecoverPaymentBody(
   payload: unknown,
-): { ok: true; razorpayPaymentId: string } | { ok: false } {
+): ParseRecoverPaymentBodyResult {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     return { ok: false };
   }
 
-  const razorpayPaymentId = (payload as Record<string, unknown>)
-    .razorpay_payment_id;
+  const record = payload as Record<string, unknown>;
+  const razorpayPaymentId = record.razorpay_payment_id;
 
   if (typeof razorpayPaymentId !== "string" || !razorpayPaymentId.trim()) {
     return { ok: false };
   }
 
-  return { ok: true, razorpayPaymentId };
+  return {
+    ok: true,
+    razorpayPaymentId,
+    simulateUnresolvedGuardian: record.simulate_unresolved_guardian === true,
+  };
 }
 
 export function recoveryHttpStatus(result: RunPaymentRecoveryResult): number {
@@ -165,9 +188,53 @@ export function recoveryHttpStatus(result: RunPaymentRecoveryResult): number {
   return 200;
 }
 
+async function runSimulatedUnresolvedRecovery(
+  razorpayPaymentId: string,
+  deps: RunPaymentRecoveryDeps,
+): Promise<RunPaymentRecoveryResult> {
+  const proposal = consideredUnresolvedProposal;
+  const context = await deps.loadContext(razorpayPaymentId);
+
+  if (!context.ok) {
+    return stopped(context.reason);
+  }
+
+  const gate = deps.evaluatePolicy({
+    proposal,
+    policy: context.policy,
+    attemptCount: context.attemptCount,
+  });
+
+  const persisted = await deps.persistDecision({
+    paymentId: context.paymentId,
+    orderId: context.orderId,
+    recoverySessionId: context.recoverySessionId,
+    proposal,
+    gate,
+  });
+
+  if (!persisted.persisted) {
+    return stopped(persisted.reason);
+  }
+
+  if (persisted.policyResult === "BLOCK" && persisted.policyReason) {
+    return stopped(persisted.policyReason as PolicyGateReason, {
+      recoverySessionId: persisted.recoverySessionId,
+      decisionId: persisted.decisionId,
+      policyResult: "BLOCK",
+    });
+  }
+
+  return stopped("INCONSISTENT_GATE", {
+    recoverySessionId: persisted.recoverySessionId,
+    decisionId: persisted.decisionId,
+  });
+}
+
 export async function runPaymentRecovery(
   razorpayPaymentId: string,
   deps: RunPaymentRecoveryDeps = defaultDeps,
+  options: RunPaymentRecoveryOptions = {},
 ): Promise<RunPaymentRecoveryResult> {
   if (!razorpayPaymentId.trim()) {
     return stopped("INVALID_INPUT");
@@ -177,6 +244,10 @@ export async function runPaymentRecovery(
 
   if (!verification.verified) {
     return stopped(verification.reason);
+  }
+
+  if (options.simulateUnresolvedGuardian === true) {
+    return runSimulatedUnresolvedRecovery(razorpayPaymentId, deps);
   }
 
   const eligibility = deps.deriveEligibility(verification);

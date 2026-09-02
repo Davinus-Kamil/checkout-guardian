@@ -19,6 +19,12 @@ export type RecoveryProposalResult =
       failureCategory: "GENERIC_PAYMENT_FAILED";
     }
   | {
+      proposed: true;
+      action: "REOPEN_CHECKOUT";
+      guardianState: "UNRESOLVED";
+      failureCategory: null;
+    }
+  | {
       proposed: false;
       action: null;
       guardianState: GuardianPaymentState;

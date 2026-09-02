@@ -15,7 +15,8 @@ export type PolicyGateReason =
   | "MISSING_POLICY"
   | "INVALID_POLICY"
   | "INCONSISTENT_PROPOSAL"
-  | "MAX_ATTEMPTS_REACHED";
+  | "MAX_ATTEMPTS_REACHED"
+  | "CONFIRMED_FAILURE_REQUIRED";
 
 export type PolicyGateResult =
   | {
@@ -75,11 +76,17 @@ export function evaluateRecoveryPolicy(input: {
     );
   }
 
-  if (
-    proposal.action !== "REOPEN_CHECKOUT" ||
-    proposal.guardianState !== "FAILED" ||
-    proposal.failureCategory !== "GENERIC_PAYMENT_FAILED"
-  ) {
+  const isConfirmedFailureProposal =
+    proposal.action === "REOPEN_CHECKOUT" &&
+    proposal.guardianState === "FAILED" &&
+    proposal.failureCategory === "GENERIC_PAYMENT_FAILED";
+
+  const isUnresolvedConsideredProposal =
+    proposal.action === "REOPEN_CHECKOUT" &&
+    proposal.guardianState === "UNRESOLVED" &&
+    proposal.failureCategory === null;
+
+  if (!isConfirmedFailureProposal && !isUnresolvedConsideredProposal) {
     return blocked(proposal, "INCONSISTENT_PROPOSAL");
   }
 
@@ -95,6 +102,14 @@ export function evaluateRecoveryPolicy(input: {
     !isNonNegativeInteger(input.attemptCount)
   ) {
     return blocked(proposal, "INVALID_POLICY");
+  }
+
+  if (isUnresolvedConsideredProposal) {
+    if (policy.requireConfirmedFailure === true) {
+      return blocked(proposal, "CONFIRMED_FAILURE_REQUIRED");
+    }
+
+    return blocked(proposal, "INCONSISTENT_PROPOSAL");
   }
 
   if (input.attemptCount >= policy.maxRecoveryAttempts) {

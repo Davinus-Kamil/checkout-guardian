@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import {
   interpretRecoverPaymentHttpResponse,
+  recoverPaymentRequestBody,
   RECOVER_PAYMENT_NOT_FOUND_MAX_ATTEMPTS,
   RECOVER_PAYMENT_NOT_FOUND_RETRY_DELAY_MS,
   shouldRetryRecoverPayment,
@@ -30,6 +31,8 @@ const RECOVERY_NOT_AUTHORIZED_MESSAGE =
   "Payment failed. Guardian did not authorize another payment attempt.";
 const RECOVERY_UNSAFE_MESSAGE =
   "Payment failed. Guardian could not safely verify recovery. Please do not pay again yet.";
+const RECOVERY_HOLD_MESSAGE =
+  "We're confirming your previous payment. Please don't pay again yet.";
 const UNIDENTIFIED_PAYMENT_MESSAGE =
   "This payment could not be identified. Guardian still needs a verified payment identity before recovery can be considered.";
 
@@ -51,7 +54,21 @@ export default function PurchasePanel() {
   const [paymentFailedMessage, setPaymentFailedMessage] = useState<
     string | null
   >(null);
+  const [recoveryOutcome, setRecoveryOutcome] =
+    useState<RecoverPaymentClientOutcome | null>(null);
   const handledFailedPaymentIds = useRef(new Set<string>());
+
+  function isControlledUnresolvedGuardianDemo(): boolean {
+    if (typeof window === "undefined") {
+      return false;
+    }
+
+    const value = new URLSearchParams(window.location.search).get(
+      "simulate_unresolved_guardian",
+    );
+
+    return value === "1" || value === "true";
+  }
 
   function readFailedPaymentId(
     response: RazorpayPaymentFailedEvent,
@@ -86,6 +103,10 @@ export default function PurchasePanel() {
       return RECOVERY_NOT_AUTHORIZED_MESSAGE;
     }
 
+    if (outcome === "hold") {
+      return RECOVERY_HOLD_MESSAGE;
+    }
+
     return RECOVERY_UNSAFE_MESSAGE;
   }
 
@@ -96,7 +117,12 @@ export default function PurchasePanel() {
       const response = await fetch("/api/payments/recover", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ razorpay_payment_id: razorpayPaymentId }),
+        body: JSON.stringify(
+          recoverPaymentRequestBody(
+            razorpayPaymentId,
+            isControlledUnresolvedGuardianDemo(),
+          ),
+        ),
       });
       const payload: unknown = await response.json().catch(() => null);
       return interpretRecoverPaymentHttpResponse(response.status, payload);
@@ -156,6 +182,7 @@ export default function PurchasePanel() {
     }
 
     setPaymentFailedMessage(messageForRecoverOutcome(result.outcome));
+    setRecoveryOutcome(result.outcome);
 
     if (result.outcome === "started") {
       void openRecoveryCheckout(result.checkout);
@@ -175,6 +202,7 @@ export default function PurchasePanel() {
     setVerificationMessage(null);
     setFailedPaymentId(null);
     setPaymentFailedMessage(null);
+    setRecoveryOutcome(null);
     setIsStartingCheckout(true);
 
     try {
@@ -351,6 +379,7 @@ export default function PurchasePanel() {
           role="status"
           className="text-sm leading-6 text-muted"
           data-failed-payment-captured={failedPaymentId ? "true" : "false"}
+          data-recovery-outcome={recoveryOutcome ?? undefined}
         >
           {paymentFailedMessage}
         </p>

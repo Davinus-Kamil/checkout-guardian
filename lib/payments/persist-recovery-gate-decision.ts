@@ -78,8 +78,8 @@ export type PersistRecoveryGateTx = {
       data: {
         recoverySessionId: string;
         paymentId: string;
-        failureCategory: "GENERIC_PAYMENT_FAILED";
-        paymentState: "FAILED";
+        failureCategory: "GENERIC_PAYMENT_FAILED" | null;
+        paymentState: "FAILED" | "UNRESOLVED";
         proposedAction: "REOPEN_CHECKOUT";
         proposalReason: null;
         policyResult: "ALLOW" | "BLOCK";
@@ -116,6 +116,10 @@ function validateInput(
     return "NO_PROPOSAL";
   }
 
+  if (isUnresolvedConfirmedFailureBlock(input)) {
+    return null;
+  }
+
   if (
     input.proposal.action !== "REOPEN_CHECKOUT" ||
     input.proposal.guardianState !== "FAILED" ||
@@ -146,15 +150,32 @@ function validateInput(
   return "INCONSISTENT_GATE";
 }
 
+function isUnresolvedConfirmedFailureBlock(
+  input: PersistRecoveryGateDecisionInput,
+): boolean {
+  return (
+    input.proposal.proposed === true &&
+    input.proposal.action === "REOPEN_CHECKOUT" &&
+    input.proposal.guardianState === "UNRESOLVED" &&
+    input.proposal.failureCategory === null &&
+    input.gate.allowed === false &&
+    input.gate.action === "REOPEN_CHECKOUT" &&
+    input.gate.guardianState === "UNRESOLVED" &&
+    input.gate.failureCategory === null &&
+    input.gate.reason === "CONFIRMED_FAILURE_REQUIRED"
+  );
+}
+
 function decisionFields(
   input: PersistRecoveryGateDecisionInput,
   recoverySessionId: string,
 ) {
+  const unresolvedBlock = isUnresolvedConfirmedFailureBlock(input);
   const shared = {
     recoverySessionId,
     paymentId: input.paymentId,
-    failureCategory: "GENERIC_PAYMENT_FAILED" as const,
-    paymentState: "FAILED" as const,
+    failureCategory: unresolvedBlock ? null : ("GENERIC_PAYMENT_FAILED" as const),
+    paymentState: unresolvedBlock ? ("UNRESOLVED" as const) : ("FAILED" as const),
     proposedAction: "REOPEN_CHECKOUT" as const,
     proposalReason: null,
     executedAction: null,

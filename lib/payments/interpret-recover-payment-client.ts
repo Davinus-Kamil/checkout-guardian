@@ -2,6 +2,7 @@ export type RecoverPaymentClientOutcome =
   | "started"
   | "payment_not_found"
   | "denied"
+  | "hold"
   | "unsafe";
 
 export type RecoveryCheckoutInstructions = {
@@ -20,6 +21,9 @@ export type RecoverPaymentClientResult =
     }
   | {
       outcome: "denied";
+    }
+  | {
+      outcome: "hold";
     }
   | {
       outcome: "unsafe";
@@ -91,6 +95,10 @@ export function interpretRecoverPaymentHttpResponse(
     return { outcome: "payment_not_found" };
   }
 
+  if (body.reason === "CONFIRMED_FAILURE_REQUIRED") {
+    return { outcome: "hold" };
+  }
+
   if (typeof body.reason === "string" && body.reason.trim()) {
     return { outcome: "denied" };
   }
@@ -106,4 +114,21 @@ export function shouldRetryRecoverPayment(
     outcome === "payment_not_found" &&
     attemptNumber < RECOVER_PAYMENT_NOT_FOUND_MAX_ATTEMPTS
   );
+}
+
+export function recoverPaymentRequestBody(
+  razorpayPaymentId: string,
+  simulateUnresolvedGuardian: boolean,
+): {
+  razorpay_payment_id: string;
+  simulate_unresolved_guardian?: true;
+} {
+  if (simulateUnresolvedGuardian) {
+    return {
+      razorpay_payment_id: razorpayPaymentId,
+      simulate_unresolved_guardian: true,
+    };
+  }
+
+  return { razorpay_payment_id: razorpayPaymentId };
 }

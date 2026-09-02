@@ -18,7 +18,13 @@ export async function POST(request: Request) {
       );
     }
 
-    const result = await runPaymentRecovery(parsed.razorpayPaymentId);
+    const result = await runPaymentRecovery(
+      parsed.razorpayPaymentId,
+      undefined,
+      {
+        simulateUnresolvedGuardian: parsed.simulateUnresolvedGuardian,
+      },
+    );
 
     return Response.json(result, { status: recoveryHttpStatus(result) });
   } catch {

@@ -157,6 +157,13 @@ test("3. payment + order + policy + no session → projected policy, attemptCoun
     attemptCount: 0,
     recoverySessionId: null,
   });
+  assert.equal(result.ok, true);
+  if (!result.ok) {
+    return;
+  }
+
+  assert.equal(result.policy?.requireConfirmedFailure, true);
+  assert.equal("unknownStateAction" in (result.policy ?? {}), false);
 });
 
 test("4. payment + order + policy + existing session → session id and attemptCount", async () => {

@@ -489,3 +489,88 @@ test("10. helper does not increment attemptCount or change session status after 
   assert.equal("attemptCount" in (harness.upsertCalls[0]?.update ?? {}), false);
   assert.equal("status" in (harness.upsertCalls[0]?.update ?? {}), false);
 });
+
+const unresolvedConsideredProposal: RecoveryProposalResult = {
+  proposed: true,
+  action: "REOPEN_CHECKOUT",
+  guardianState: "UNRESOLVED",
+  failureCategory: null,
+};
+
+const confirmedFailureRequiredGate: PolicyGateResult = {
+  allowed: false,
+  action: "REOPEN_CHECKOUT",
+  guardianState: "UNRESOLVED",
+  failureCategory: null,
+  reason: "CONFIRMED_FAILURE_REQUIRED",
+};
+
+test("B. Scenario B BLOCK Decision stores UNRESOLVED truthfully", async () => {
+  const harness = createStore();
+
+  const result = await persistRecoveryGateDecision(
+    {
+      paymentId: PAYMENT_ID,
+      orderId: ORDER_ID,
+      recoverySessionId: null,
+      proposal: unresolvedConsideredProposal,
+      gate: confirmedFailureRequiredGate,
+    },
+    harness.store,
+  );
+
+  assert.equal(result.persisted, true);
+  if (!result.persisted) {
+    return;
+  }
+
+  assert.equal(result.policyResult, "BLOCK");
+  assert.equal(result.policyReason, "CONFIRMED_FAILURE_REQUIRED");
+  assert.equal(harness.decisions.length, 1);
+  assert.deepEqual(harness.decisions[0], {
+    id: harness.decisions[0]?.id,
+    recoverySessionId: harness.sessions[0]?.id,
+    paymentId: PAYMENT_ID,
+    failureCategory: null,
+    paymentState: "UNRESOLVED",
+    proposedAction: "REOPEN_CHECKOUT",
+    proposalReason: null,
+    policyResult: "BLOCK",
+    policyReason: "CONFIRMED_FAILURE_REQUIRED",
+    executedAction: null,
+    outcome: null,
+    recoveredAmount: null,
+  });
+});
+
+test("C. Scenario B BLOCK persistence does not increment attemptCount", async () => {
+  const harness = createStore({
+    sessions: [
+      {
+        id: SESSION_ID,
+        orderId: ORDER_ID,
+        originalPaymentId: PAYMENT_ID,
+        status: "OPEN",
+        attemptCount: 0,
+      },
+    ],
+  });
+
+  const result = await persistRecoveryGateDecision(
+    {
+      paymentId: PAYMENT_ID,
+      orderId: ORDER_ID,
+      recoverySessionId: SESSION_ID,
+      proposal: unresolvedConsideredProposal,
+      gate: confirmedFailureRequiredGate,
+    },
+    harness.store,
+  );
+
+  assert.equal(result.persisted, true);
+  assert.equal(harness.sessions.length, 1);
+  assert.equal(harness.sessions[0]?.attemptCount, 0);
+  assert.equal(harness.sessions[0]?.status, "OPEN");
+  assert.equal(harness.sessionUpdates, 0);
+  assert.equal(harness.upsertCalls.length, 0);
+});
