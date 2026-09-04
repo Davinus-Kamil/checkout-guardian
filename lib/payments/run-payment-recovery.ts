@@ -19,6 +19,11 @@ import {
   type RecoveryGateContextResult,
 } from "./load-recovery-gate-context.ts";
 import {
+  consultRecoveryDecisionEngine,
+  type RecoveryDecisionEngineInput,
+  type RecoveryDecisionEngineResult,
+} from "./consult-recovery-decision-engine.ts";
+import {
   persistRecoveryGateDecision,
   type PersistRecoveryGateDecisionFailureReason,
   type PersistRecoveryGateDecisionInput,
@@ -101,6 +106,9 @@ export type RunPaymentRecoveryDeps = {
   loadCheckoutOrder: (
     orderId: string,
   ) => Promise<RecoveryCheckoutOrder | null>;
+  consultDecisionEngine: (
+    input: RecoveryDecisionEngineInput,
+  ) => Promise<RecoveryDecisionEngineResult>;
 };
 
 const defaultDeps: RunPaymentRecoveryDeps = {
@@ -112,6 +120,7 @@ const defaultDeps: RunPaymentRecoveryDeps = {
   persistDecision: persistRecoveryGateDecision,
   startAuthorized: startAuthorizedRecovery,
   loadCheckoutOrder: loadRecoveryCheckoutOrder,
+  consultDecisionEngine: consultRecoveryDecisionEngine,
 };
 
 function stopped(
@@ -231,6 +240,41 @@ async function runSimulatedUnresolvedRecovery(
   });
 }
 
+async function readAdvisoryProposalReason(
+  deps: RunPaymentRecoveryDeps,
+  verification: PaymentVerificationResult,
+  proposal: RecoveryProposalResult,
+): Promise<string | null> {
+  if (
+    !verification.verified ||
+    !proposal.proposed ||
+    proposal.action !== "REOPEN_CHECKOUT" ||
+    proposal.guardianState !== "FAILED" ||
+    proposal.failureCategory !== "GENERIC_PAYMENT_FAILED"
+  ) {
+    return null;
+  }
+
+  try {
+    const advisory = await deps.consultDecisionEngine({
+      guardianState: "FAILED",
+      failureCategory: "GENERIC_PAYMENT_FAILED",
+      paymentMethod: verification.facts.paymentMethod,
+      errorCode: verification.facts.errorCode,
+      errorReason: verification.facts.errorReason,
+      candidateAction: "REOPEN_CHECKOUT",
+    });
+
+    if (!advisory.available) {
+      return null;
+    }
+
+    return advisory.reason;
+  } catch {
+    return null;
+  }
+}
+
 export async function runPaymentRecovery(
   razorpayPaymentId: string,
   deps: RunPaymentRecoveryDeps = defaultDeps,
@@ -268,6 +312,12 @@ export async function runPaymentRecovery(
     return stopped(context.reason);
   }
 
+  const proposalReason = await readAdvisoryProposalReason(
+    deps,
+    verification,
+    proposal,
+  );
+
   const gate = deps.evaluatePolicy({
     proposal,
     policy: context.policy,
@@ -280,6 +330,7 @@ export async function runPaymentRecovery(
     recoverySessionId: context.recoverySessionId,
     proposal,
     gate,
+    proposalReason,
   });
 
   if (!persisted.persisted) {

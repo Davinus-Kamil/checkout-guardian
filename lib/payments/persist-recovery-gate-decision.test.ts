@@ -574,3 +574,55 @@ test("C. Scenario B BLOCK persistence does not increment attemptCount", async ()
   assert.equal(harness.sessionUpdates, 0);
   assert.equal(harness.upsertCalls.length, 0);
 });
+
+test("11. supplied proposalReason is persisted on ALLOW", async () => {
+  const harness = createStore();
+  const reason = "Confirmed issuer decline; reopen checkout.";
+
+  const result = await persistRecoveryGateDecision(
+    {
+      ...allowInput(null),
+      proposalReason: `  ${reason}  `,
+    },
+    harness.store,
+  );
+
+  assert.equal(result.persisted, true);
+  assert.equal(harness.decisions[0]?.proposalReason, reason);
+  assert.equal(harness.decisions[0]?.proposedAction, "REOPEN_CHECKOUT");
+});
+
+test("12. absent/blank proposalReason remains null", async () => {
+  const harness = createStore();
+
+  const result = await persistRecoveryGateDecision(
+    {
+      ...allowInput(null),
+      proposalReason: "   ",
+    },
+    harness.store,
+  );
+
+  assert.equal(result.persisted, true);
+  assert.equal(harness.decisions[0]?.proposalReason, null);
+});
+
+test("D. Scenario B ignores supplied proposalReason", async () => {
+  const harness = createStore();
+
+  const result = await persistRecoveryGateDecision(
+    {
+      paymentId: PAYMENT_ID,
+      orderId: ORDER_ID,
+      recoverySessionId: null,
+      proposal: unresolvedConsideredProposal,
+      gate: confirmedFailureRequiredGate,
+      proposalReason: "AI should not explain UNRESOLVED recovery.",
+    },
+    harness.store,
+  );
+
+  assert.equal(result.persisted, true);
+  assert.equal(harness.decisions[0]?.proposalReason, null);
+  assert.equal(harness.decisions[0]?.paymentState, "UNRESOLVED");
+});

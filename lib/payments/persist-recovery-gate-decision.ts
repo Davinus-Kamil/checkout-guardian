@@ -1,12 +1,15 @@
 import type { PolicyGateResult } from "./evaluate-recovery-policy.ts";
 import type { RecoveryProposalResult } from "./propose-recovery-action.ts";
 
+export const RECOVERY_PROPOSAL_REASON_MAX_LENGTH = 280;
+
 export type PersistRecoveryGateDecisionInput = {
   paymentId: string;
   orderId: string;
   recoverySessionId: string | null;
   proposal: RecoveryProposalResult;
   gate: PolicyGateResult;
+  proposalReason?: string | null;
 };
 
 export type PersistRecoveryGateDecisionFailureReason =
@@ -81,7 +84,7 @@ export type PersistRecoveryGateTx = {
         failureCategory: "GENERIC_PAYMENT_FAILED" | null;
         paymentState: "FAILED" | "UNRESOLVED";
         proposedAction: "REOPEN_CHECKOUT";
-        proposalReason: null;
+        proposalReason: string | null;
         policyResult: "ALLOW" | "BLOCK";
         policyReason: string | null;
         executedAction: null;
@@ -166,6 +169,22 @@ function isUnresolvedConfirmedFailureBlock(
   );
 }
 
+function sanitizedProposalReason(
+  value: string | null | undefined,
+): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const reason = value.trim();
+
+  if (!reason || reason.length > RECOVERY_PROPOSAL_REASON_MAX_LENGTH) {
+    return null;
+  }
+
+  return reason;
+}
+
 function decisionFields(
   input: PersistRecoveryGateDecisionInput,
   recoverySessionId: string,
@@ -177,7 +196,9 @@ function decisionFields(
     failureCategory: unresolvedBlock ? null : ("GENERIC_PAYMENT_FAILED" as const),
     paymentState: unresolvedBlock ? ("UNRESOLVED" as const) : ("FAILED" as const),
     proposedAction: "REOPEN_CHECKOUT" as const,
-    proposalReason: null,
+    proposalReason: unresolvedBlock
+      ? null
+      : sanitizedProposalReason(input.proposalReason),
     executedAction: null,
     outcome: null,
     recoveredAmount: null,

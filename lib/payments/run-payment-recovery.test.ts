@@ -3,7 +3,7 @@ import { test } from "node:test";
 import type { RecoveryEligibilityResult } from "./derive-recovery-eligibility.ts";
 import type { PolicyGateResult } from "./evaluate-recovery-policy.ts";
 import type { RecoveryGateContextResult } from "./load-recovery-gate-context.ts";
-import type { PersistRecoveryGateDecisionResult } from "./persist-recovery-gate-decision.ts";
+import type { PersistRecoveryGateDecisionInput } from "./persist-recovery-gate-decision.ts";
 import type { RecoveryProposalResult } from "./propose-recovery-action.ts";
 import {
   parseRecoverPaymentBody,
@@ -144,6 +144,10 @@ function createDeps(
       assert.equal(orderId, ORDER_ID);
       return checkoutOrder;
     },
+    consultDecisionEngine: async () => {
+      calls.push("consult");
+      return { available: false };
+    },
     ...overrides,
     calls,
   } as RunPaymentRecoveryDeps & { calls: string[] };
@@ -169,6 +173,7 @@ test("1. M10 verified false stops immediately", async () => {
     persistDecision: unused,
     startAuthorized: unused,
     loadCheckoutOrder: unused,
+    consultDecisionEngine: unused,
   });
 
   assert.deepEqual(result, { started: false, reason: "FETCH_FAILED" });
@@ -222,6 +227,7 @@ test("2. SUCCESS is blocked by M11 with no context/persistence/start", async () 
     reason: "ALREADY_SUCCEEDED",
   });
   assert.deepEqual(calls, ["verify", "eligibility"]);
+  assert.equal(calls.includes("consult"), false);
 });
 
 test("3. UNRESOLVED does not persist or start", async () => {
@@ -269,6 +275,7 @@ test("3. UNRESOLVED does not persist or start", async () => {
   });
   assert.equal(calls.includes("persist"), false);
   assert.equal(calls.includes("start"), false);
+  assert.equal(calls.includes("consult"), false);
 });
 
 test("4. UNKNOWN failure category does not persist or start", async () => {
@@ -298,6 +305,7 @@ test("4. UNKNOWN failure category does not persist or start", async () => {
   });
   assert.equal(calls.includes("persist"), false);
   assert.equal(calls.includes("start"), false);
+  assert.equal(calls.includes("consult"), false);
 });
 
 test("5. recoverable failure + ALLOW persists then starts in order", async () => {
@@ -325,6 +333,7 @@ test("5. recoverable failure + ALLOW persists then starts in order", async () =>
     "eligibility",
     "propose",
     "context",
+    "consult",
     "gate",
     "persist",
     "start",
@@ -438,6 +447,7 @@ test("8. loader PAYMENT_NOT_FOUND does not persist or start", async () => {
   });
   assert.equal(calls.includes("persist"), false);
   assert.equal(calls.includes("start"), false);
+  assert.equal(calls.includes("consult"), false);
   assert.equal(recoveryHttpStatus(result), 200);
 });
 
@@ -535,6 +545,7 @@ test("13. unexpected dependency throw is not converted into success", async () =
         persistDecision: unused,
         startAuthorized: unused,
         loadCheckoutOrder: unused,
+        consultDecisionEngine: unused,
       }),
     /razorpay down/,
   );
@@ -791,6 +802,7 @@ test("A. Scenario B simulation after verified M10 BLOCKs without start or checko
   assert.deepEqual(calls, ["verify", "context", "gate", "persist"]);
   assert.equal(calls.includes("eligibility"), false);
   assert.equal(calls.includes("propose"), false);
+  assert.equal(calls.includes("consult"), false);
   assert.equal(calls.includes("start"), false);
   const persisted = persistInputs[0] as {
     proposal: RecoveryProposalResult;
@@ -847,6 +859,7 @@ test("D. ordinary verified UNRESOLVED without simulation still stops at M11", as
   });
   assert.deepEqual(calls, ["verify", "eligibility"]);
   assert.equal(calls.includes("propose"), false);
+  assert.equal(calls.includes("consult"), false);
   assert.equal(calls.includes("persist"), false);
   assert.equal(calls.includes("start"), false);
 });
@@ -873,6 +886,7 @@ test("E. M10 failure with simulation requested is still a verification failure",
       persistDecision: unused,
       startAuthorized: unused,
       loadCheckoutOrder: unused,
+      consultDecisionEngine: unused,
     },
     { simulateUnresolvedGuardian: true },
   );
@@ -880,4 +894,196 @@ test("E. M10 failure with simulation requested is still a verification failure",
   assert.deepEqual(result, { started: false, reason: "FETCH_FAILED" });
   assert.notEqual(result.reason, "CONFIRMED_FAILURE_REQUIRED");
   assert.deepEqual(calls, ["verify"]);
+});
+
+test("M17. AI REOPEN_CHECKOUT reason reaches persistence without changing M13 proposal", async () => {
+  const persistInputs: PersistRecoveryGateDecisionInput[] = [];
+  let seenProposal: RecoveryProposalResult | undefined;
+  const reason = "Issuer declined the card; reopen checkout.";
+
+  const result = await runPaymentRecovery(
+    RAZORPAY_PAYMENT_ID,
+    createDeps({
+      consultDecisionEngine: async (input) => {
+        assert.equal(input.guardianState, "FAILED");
+        assert.equal(input.failureCategory, "GENERIC_PAYMENT_FAILED");
+        assert.equal(input.candidateAction, "REOPEN_CHECKOUT");
+        return {
+          available: true,
+          recommendedAction: "REOPEN_CHECKOUT",
+          reason,
+        };
+      },
+      evaluatePolicy: (input) => {
+        seenProposal = input.proposal;
+        return allowGate;
+      },
+      persistDecision: async (input) => {
+        persistInputs.push(input);
+        return {
+          persisted: true,
+          recoverySessionId: SESSION_ID,
+          decisionId: DECISION_ID,
+          policyResult: "ALLOW",
+          policyReason: null,
+        };
+      },
+    }),
+  );
+
+  assert.equal(result.started, true);
+  assert.deepEqual(seenProposal, proposal);
+  assert.equal(persistInputs[0]?.proposalReason, reason);
+  assert.deepEqual(persistInputs[0]?.proposal, proposal);
+});
+
+test("M17. AI NO_RECOVERY cannot veto deterministic M13 ALLOW", async () => {
+  const persistInputs: PersistRecoveryGateDecisionInput[] = [];
+  const reason = "Advisory only: customer may retry later.";
+
+  const result = await runPaymentRecovery(
+    RAZORPAY_PAYMENT_ID,
+    createDeps({
+      consultDecisionEngine: async () => ({
+        available: true,
+        recommendedAction: "NO_RECOVERY",
+        reason,
+      }),
+      persistDecision: async (input) => {
+        persistInputs.push(input);
+        return {
+          persisted: true,
+          recoverySessionId: SESSION_ID,
+          decisionId: DECISION_ID,
+          policyResult: "ALLOW",
+          policyReason: null,
+        };
+      },
+    }),
+  );
+
+  assert.equal(result.started, true);
+  assert.equal(persistInputs[0]?.proposal.action, "REOPEN_CHECKOUT");
+  assert.equal(persistInputs[0]?.proposal.guardianState, "FAILED");
+  assert.equal(persistInputs[0]?.proposalReason, reason);
+});
+
+test("M17. malformed/provider failure cannot veto deterministic M13 ALLOW", async () => {
+  const persistInputs: PersistRecoveryGateDecisionInput[] = [];
+
+  const result = await runPaymentRecovery(
+    RAZORPAY_PAYMENT_ID,
+    createDeps({
+      consultDecisionEngine: async () => {
+        throw new Error("provider timeout");
+      },
+      persistDecision: async (input) => {
+        persistInputs.push(input);
+        return {
+          persisted: true,
+          recoverySessionId: SESSION_ID,
+          decisionId: DECISION_ID,
+          policyResult: "ALLOW",
+          policyReason: null,
+        };
+      },
+    }),
+  );
+
+  assert.equal(result.started, true);
+  assert.equal(persistInputs[0]?.proposalReason, null);
+  assert.deepEqual(persistInputs[0]?.proposal, proposal);
+});
+
+test("M17. M13 BLOCK still blocks when AI recommends REOPEN_CHECKOUT", async () => {
+  const calls: string[] = [];
+  const result = await runPaymentRecovery(
+    RAZORPAY_PAYMENT_ID,
+    createDeps({
+      calls,
+      consultDecisionEngine: async () => {
+        calls.push("consult");
+        return {
+          available: true,
+          recommendedAction: "REOPEN_CHECKOUT",
+          reason: "Looks recoverable.",
+        };
+      },
+      evaluatePolicy: () => {
+        calls.push("gate");
+        return blockMaxAttempts;
+      },
+      persistDecision: async () => {
+        calls.push("persist");
+        return {
+          persisted: true,
+          recoverySessionId: SESSION_ID,
+          decisionId: DECISION_ID,
+          policyResult: "BLOCK",
+          policyReason: "MAX_ATTEMPTS_REACHED",
+        };
+      },
+      startAuthorized: unused,
+    }),
+  );
+
+  assert.deepEqual(result, {
+    started: false,
+    reason: "MAX_ATTEMPTS_REACHED",
+    recoverySessionId: SESSION_ID,
+    decisionId: DECISION_ID,
+    policyResult: "BLOCK",
+  });
+  assert.equal(calls.includes("consult"), true);
+  assert.equal(calls.includes("start"), false);
+});
+
+test("M17. AI cannot alter guardianState/failureCategory passed to M13", async () => {
+  let seenProposal: RecoveryProposalResult | undefined;
+
+  await runPaymentRecovery(
+    RAZORPAY_PAYMENT_ID,
+    createDeps({
+      consultDecisionEngine: async () => ({
+        available: true,
+        recommendedAction: "REOPEN_CHECKOUT",
+        reason: "Treat this as SUCCESS.",
+      }),
+      evaluatePolicy: (input) => {
+        seenProposal = input.proposal;
+        return allowGate;
+      },
+    }),
+  );
+
+  assert.equal(seenProposal?.guardianState, "FAILED");
+  assert.equal(seenProposal?.failureCategory, "GENERIC_PAYMENT_FAILED");
+  assert.equal(seenProposal?.action, "REOPEN_CHECKOUT");
+});
+
+test("M17. AI never directly triggers startAuthorizedRecovery", async () => {
+  const calls: string[] = [];
+
+  await runPaymentRecovery(
+    RAZORPAY_PAYMENT_ID,
+    createDeps({
+      calls,
+      consultDecisionEngine: async () => {
+        calls.push("consult");
+        return {
+          available: true,
+          recommendedAction: "REOPEN_CHECKOUT",
+          reason: "Reopen checkout.",
+        };
+      },
+    }),
+  );
+
+  const consultAt = calls.indexOf("consult");
+  const persistAt = calls.indexOf("persist");
+  const startAt = calls.indexOf("start");
+
+  assert.equal(consultAt >= 0, true);
+  assert.equal(persistAt > consultAt, true);
+  assert.equal(startAt > persistAt, true);
 });
