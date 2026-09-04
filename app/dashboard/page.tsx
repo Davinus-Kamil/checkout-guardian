@@ -1,5 +1,9 @@
 import Link from "next/link";
+import RecoveryPolicyPanel, {
+  type RecoveryPolicyPanelPolicy,
+} from "./recovery-policy-panel";
 import { loadMerchantDashboard } from "@/lib/payments/load-merchant-dashboard";
+import { loadMerchantPolicy } from "@/lib/payments/load-merchant-policy";
 import {
   formatPaiseAsInrRupees,
   type PresentedMerchantDashboard,
@@ -138,8 +142,10 @@ function DecisionCard({
 
 function DashboardBody({
   dashboard,
+  policy,
 }: {
   dashboard: PresentedMerchantDashboard;
+  policy: RecoveryPolicyPanelPolicy | null;
 }) {
   const { metrics } = dashboard;
 
@@ -195,6 +201,8 @@ function DashboardBody({
           />
         </section>
 
+        <RecoveryPolicyPanel policy={policy} />
+
         <section className="mt-10">
           <div className="flex items-end justify-between gap-4">
             <div>
@@ -225,7 +233,20 @@ function DashboardBody({
 }
 
 export default async function MerchantDashboardPage() {
-  const dashboard = await loadMerchantDashboard();
+  const [dashboard, policyResult] = await Promise.all([
+    loadMerchantDashboard(),
+    loadMerchantPolicy(),
+  ]);
 
-  return <DashboardBody dashboard={dashboard} />;
+  const policy = policyResult.ok
+    ? {
+        requireConfirmedFailure: policyResult.policy.requireConfirmedFailure,
+        maxRecoveryAttempts: policyResult.policy.maxRecoveryAttempts,
+        allowAlternativeMethod: policyResult.policy.allowAlternativeMethod,
+        unknownStateAction: policyResult.policy.unknownStateAction,
+        riskFailureAction: policyResult.policy.riskFailureAction,
+      }
+    : null;
+
+  return <DashboardBody dashboard={dashboard} policy={policy} />;
 }

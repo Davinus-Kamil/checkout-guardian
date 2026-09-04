@@ -1,18 +1,14 @@
 import { randomUUID } from "crypto";
+import {
+  DEMO_MERCHANT_ID,
+  DEMO_MERCHANT_NAME,
+  DEMO_MERCHANT_POLICY_DEFAULTS,
+} from "@/lib/merchants/demo-merchant";
 import { prisma } from "@/lib/prisma";
 import { getRazorpayClient } from "@/lib/razorpay/client";
 
 const ORDER_AMOUNT_PAISE = 349900;
 const CURRENCY = "INR";
-const DEMO_MERCHANT_ID = "demo_checkout_guardian_merchant";
-const DEMO_MERCHANT_NAME = "Checkout Guardian Demo Merchant";
-const DEMO_MERCHANT_POLICY = {
-  requireConfirmedFailure: true,
-  maxRecoveryAttempts: 1,
-  allowAlternativeMethod: true,
-  unknownStateAction: "BLOCK",
-  riskFailureAction: "BLOCK",
-} as const;
 
 export const runtime = "nodejs";
 
@@ -38,10 +34,10 @@ export async function POST() {
 
     await prisma.merchantPolicy.upsert({
       where: { merchantId: DEMO_MERCHANT_ID },
-      update: { ...DEMO_MERCHANT_POLICY },
+      update: {},
       create: {
         merchantId: DEMO_MERCHANT_ID,
-        ...DEMO_MERCHANT_POLICY,
+        ...DEMO_MERCHANT_POLICY_DEFAULTS,
       },
     });
 
