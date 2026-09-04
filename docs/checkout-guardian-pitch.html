@@ -1,0 +1,584 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Checkout Guardian — Loom Storyboard</title>
+<style>
+  :root{
+    --navy:#071a42;
+    --blue:#1769ff;
+    --blue2:#49a2ff;
+    --ink:#0d2148;
+    --muted:#61708d;
+    --line:#dce7f6;
+    --soft:#f5f9ff;
+    --green:#16a56a;
+    --amber:#f3a312;
+    --red:#ef4b55;
+    --violet:#7357ff;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth;scroll-snap-type:y mandatory}
+  body{
+    margin:0;
+    font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    color:var(--ink);
+    background:#fff;
+    overflow-y:scroll;
+  }
+  section{
+    min-height:100svh;
+    height:100svh;
+    scroll-snap-align:start;
+    scroll-snap-stop:always;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    position:relative;
+    overflow:hidden;
+    padding:72px 8vw 74px;
+  }
+  .wrap{
+    width:min(1160px,100%);
+    margin:0 auto;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    align-items:center;
+    max-height:calc(100svh - 150px);
+    transform:none !important;
+  }
+  .eyebrow{
+    display:inline-flex;gap:10px;align-items:center;
+    padding:9px 14px;border:1px solid #cfe0fa;border-radius:999px;
+    background:rgba(255,255,255,.82);backdrop-filter:blur(8px);
+    font-size:14px;font-weight:800;color:var(--blue);letter-spacing:.02em
+  }
+  h1{font-size:clamp(56px,7vw,108px);line-height:.92;margin:20px 0 18px;letter-spacing:-.055em}
+  h2{font-size:clamp(38px,4.35vw,68px);line-height:1.04;margin:0 0 18px;letter-spacing:-.042em;max-width:1050px}
+  h3{font-size:clamp(24px,2.55vw,38px);margin:0 0 12px;letter-spacing:-.025em}
+  p{font-size:clamp(18px,1.7vw,27px);line-height:1.42;margin:0;color:#31415e;max-width:980px}
+  .small{font-size:15px;color:var(--muted)}
+  .accent{color:var(--blue)}
+  .muted{color:var(--muted)}
+  .scene-no{
+    position:absolute;left:34px;top:28px;
+    width:42px;height:42px;border-radius:14px;background:var(--navy);color:white;
+    display:grid;place-items:center;font-weight:900;font-size:15px
+  }
+  .time{
+    position:absolute;right:38px;top:32px;font-size:14px;color:#667792;font-weight:800
+  }
+  .hint{
+    position:absolute;bottom:16px;left:50%;transform:translateX(-50%);
+    display:flex;align-items:center;gap:9px;color:#74839e;font-size:10px;font-weight:900;
+    letter-spacing:.16em;text-transform:uppercase;white-space:nowrap
+  }
+  .chev{width:30px;height:30px;border:1px solid #cfdaeb;border-radius:50%;display:grid;place-items:center;background:#fff}
+  .hero{
+    background:
+      radial-gradient(circle at 80% 18%,rgba(38,128,255,.18),transparent 32%),
+      radial-gradient(circle at 92% 74%,rgba(62,161,255,.10),transparent 26%),
+      linear-gradient(120deg,#fff 0%,#f7fbff 55%,#edf5ff 100%);
+  }
+  .grid2{display:grid;grid-template-columns:1.05fr .95fr;gap:70px;align-items:center}
+  .logo{display:flex;align-items:center;gap:22px}
+  .shield{
+    width:110px;height:126px;
+    clip-path:polygon(50% 0,93% 15%,87% 74%,50% 100%,13% 74%,7% 15%);
+    background:linear-gradient(145deg,#38a3ff,#0956dd 62%,#05388e);
+    display:grid;place-items:center;box-shadow:0 20px 50px rgba(21,105,255,.3);
+  }
+  .shield:after{content:"✓";font-size:58px;color:white;font-weight:900}
+  .product{
+    position:relative;height:500px;
+    border-radius:42px;
+    background:linear-gradient(145deg,rgba(255,255,255,.9),rgba(226,240,255,.75));
+    border:1px solid #d9e8fb;box-shadow:0 28px 70px rgba(14,71,155,.14);
+    display:grid;place-items:center;
+  }
+  .headphones{
+    width:290px;height:260px;position:relative;
+  }
+  .headphones:before{
+    content:"";position:absolute;left:52px;top:0;width:180px;height:180px;border:30px solid #0a1c45;border-bottom:0;border-radius:120px 120px 0 0;
+  }
+  .ear{position:absolute;top:115px;width:88px;height:130px;background:linear-gradient(145deg,#102a5a,#07132d);border-radius:42px;box-shadow:0 18px 30px rgba(0,0,0,.24)}
+  .ear.left{left:18px}.ear.right{right:18px}
+  .fail-card{
+    position:absolute;left:-54px;top:55px;width:240px;background:white;border:1px solid #f2cbd0;
+    border-radius:20px;padding:22px;box-shadow:0 18px 40px rgba(90,30,40,.10);transform:rotate(-3deg)
+  }
+  .x{width:54px;height:54px;border-radius:50%;background:#ff5360;color:#fff;display:grid;place-items:center;margin:auto;font-size:30px;font-weight:900}
+  .price-card{position:absolute;right:38px;bottom:30px;background:#fff;border:1px solid #dae7f7;padding:20px 24px;border-radius:18px;box-shadow:0 15px 34px rgba(19,63,121,.10)}
+  .benefits{display:flex;gap:35px;margin-top:38px;flex-wrap:wrap}
+  .benefit{display:flex;align-items:center;gap:12px;font-weight:800}
+  .icon{
+    width:48px;height:48px;border-radius:50%;background:#eef5ff;display:grid;place-items:center;color:var(--blue);font-size:23px;font-weight:900
+  }
+
+  .center{text-align:center}
+  .story-card{
+    margin:38px auto 0;width:min(800px,100%);padding:34px;border:1px solid var(--line);border-radius:28px;background:white;box-shadow:0 18px 54px rgba(17,64,130,.08)
+  }
+  .customer-flow{display:flex;align-items:center;justify-content:center;gap:32px;margin-top:42px}
+  .person{
+    width:145px;height:145px;border-radius:50%;background:linear-gradient(145deg,#eaf3ff,#dbe9ff);display:grid;place-items:center;font-size:70px
+  }
+  .arrow{font-size:42px;color:#8ea8cc}
+  .checkout{
+    width:310px;padding:28px;border:1px solid var(--line);border-radius:24px;background:#fff;box-shadow:0 16px 40px rgba(17,64,130,.09);text-align:left
+  }
+  .button{margin-top:18px;background:var(--blue);color:#fff;border-radius:10px;padding:13px 16px;text-align:center;font-weight:900}
+  .failure-bg{background:linear-gradient(180deg,#fff 0%,#fff8f9 100%)}
+  .question{font-size:clamp(68px,10vw,150px);font-weight:950;letter-spacing:-.07em;color:var(--navy)}
+  .question .retry{color:var(--blue)}
+  .keyline{
+    margin:28px auto 0;max-width:900px;padding:28px 34px;border-radius:24px;
+    background:#fff0f2;border:1px solid #ffd4d9;font-size:clamp(28px,3vw,47px);font-weight:950;line-height:1.15
+  }
+  .states{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:44px}
+  .state{padding:26px 16px;border-radius:22px;border:1px solid var(--line);background:#fff;text-align:center}
+  .state b{display:block;font-size:22px;margin-top:12px}
+  .state .bubble{width:64px;height:64px;border-radius:50%;display:grid;place-items:center;margin:auto;font-size:29px;color:#fff;font-weight:900}
+  .bg-red{background:var(--red)}.bg-green{background:var(--green)}.bg-blue{background:var(--blue)}.bg-violet{background:var(--violet)}
+  .guardian-bg{background:linear-gradient(145deg,#f8fbff,#eef6ff)}
+  .flowline{display:flex;align-items:center;justify-content:center;gap:15px;margin:50px 0 36px}
+  .step{width:150px;text-align:center}
+  .step .icon{margin:auto;width:72px;height:72px;font-size:31px}
+  .step b{display:block;margin-top:10px;font-size:16px}
+  .flow-arrow{font-size:28px;color:#9fb2cf}
+  .triad{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:35px}
+  .choice{padding:24px;border-radius:20px;font-weight:900;font-size:25px}
+  .recover{background:#e9fbf2;color:#087b4b;border:1px solid #c7f1dc}
+  .hold{background:#fff6db;color:#8d5d00;border:1px solid #ffe5a0}
+  .stop{background:#fff0f1;color:#b92e39;border:1px solid #ffd1d5}
+  .switch{
+    background:linear-gradient(135deg,#071a42,#0a347a 60%,#1769ff);color:#fff
+  }
+  .switch h2,.switch p{color:#fff}
+  .switch-box{
+    margin:40px auto 0;width:min(760px,100%);border:1px solid rgba(255,255,255,.22);border-radius:26px;padding:36px;background:rgba(255,255,255,.07);backdrop-filter:blur(8px)
+  }
+  .switch-label{font-size:13px;letter-spacing:.18em;font-weight:900;text-transform:uppercase;color:#8fc3ff}
+  .switch-title{font-size:clamp(42px,5vw,76px);font-weight:950;line-height:1.02;margin:8px 0 10px}
+  .demo-path{display:flex;justify-content:center;gap:12px;flex-wrap:wrap;margin-top:20px}
+  .pill{padding:10px 15px;border-radius:999px;background:rgba(255,255,255,.11);border:1px solid rgba(255,255,255,.15);font-weight:800}
+  .hold-bg{background:linear-gradient(180deg,#fff,#fffbef)}
+  .stop-bg{background:linear-gradient(180deg,#fff,#fff7f8)}
+  .action-card{max-width:820px;margin:40px auto 0;padding:34px;border-radius:26px;text-align:left}
+  .action-card h3{font-size:38px}
+  .action-row{display:flex;gap:18px;margin-top:18px;align-items:flex-start}
+  .action-row span{font-size:28px}
+  .portfolio{background:linear-gradient(145deg,#f8fbff,#eef6ff)}
+  .money{font-size:clamp(78px,10vw,150px);font-weight:950;letter-spacing:-.07em;color:var(--green)}
+  .portfolio-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:30px}
+  .metric{padding:26px;border:1px solid var(--line);border-radius:20px;background:white;text-align:left}
+  .metric b{font-size:28px}
+  .authority{display:grid;grid-template-columns:1fr 80px 1fr 80px 1fr;align-items:center;margin-top:54px}
+  .auth{padding:36px 24px;border:1px solid var(--line);border-radius:26px;background:#fff;text-align:center;box-shadow:0 15px 40px rgba(17,64,130,.08)}
+  .auth .icon{width:74px;height:74px;margin:auto;font-size:32px}
+  .auth b{display:block;font-size:26px;margin:14px 0 7px}
+  .receipt{
+    width:min(760px,100%);margin:35px auto 0;background:#fff;border:1px solid var(--line);border-radius:24px;padding:28px;box-shadow:0 18px 44px rgba(14,65,130,.09);text-align:left
+  }
+  .rrow{display:flex;justify-content:space-between;gap:20px;padding:13px 2px;border-bottom:1px solid #edf2f8;font-size:17px}
+  .rrow:last-child{border-bottom:0}
+  .proof-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:38px}
+  .proof{padding:24px;border:1px solid var(--line);border-radius:20px;background:#fff;text-align:center;font-weight:850}
+  .tests{font-size:clamp(74px,9vw,130px);font-weight:950;color:var(--green);letter-spacing:-.06em;margin-top:26px}
+  .close{
+    background:
+      radial-gradient(circle at 50% 100%,rgba(54,124,255,.28),transparent 34%),
+      linear-gradient(145deg,#071a42,#0b2a60 58%,#0e4aa9);color:white
+  }
+  .close h2,.close p{color:white}
+  .closing-lines{font-size:clamp(34px,4vw,64px);font-weight:950;line-height:1.12;letter-spacing:-.04em}
+  .closing-lines span{display:block;margin:8px 0}
+  .final-tag{margin-top:45px;font-size:clamp(38px,5vw,74px);font-weight:950}
+  .final-tag .accent{color:#60a8ff}
+
+  nav{
+    position:fixed;right:20px;top:50%;transform:translateY(-50%);
+    z-index:20;display:flex;flex-direction:column;gap:8px;padding:10px 8px;border:1px solid #d8e4f4;border-radius:28px;background:rgba(255,255,255,.82);backdrop-filter:blur(10px)
+  }
+  nav a{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;text-decoration:none;color:#7c8da8;font-size:10px;font-weight:900}
+  nav a:hover{background:#eaf2ff;color:var(--blue)}
+  @media(max-width:900px){
+    #s10 .story-card > div{grid-template-columns:1fr 1fr !important}
+
+    section{padding:58px 26px}
+    .grid2{grid-template-columns:1fr;gap:30px}
+    .product{height:350px}
+    .states,.triad,.portfolio-grid,.proof-grid{grid-template-columns:1fr 1fr}
+    .authority{grid-template-columns:1fr;gap:12px}.authority>.arrow{transform:rotate(90deg)}
+    .flowline{flex-wrap:wrap}
+    nav{display:none}
+  }
+
+
+
+
+  /* Clean Loom presentation fit */
+  @media (max-height: 920px) and (min-width: 901px){
+    section{padding-top:62px;padding-bottom:62px}
+    .wrap{max-height:calc(100svh - 128px)}
+    h2{font-size:clamp(34px,4vw,60px)}
+    .hint{bottom:10px}
+  }
+  @media (max-height: 780px) and (min-width: 901px){
+    section{padding-top:54px;padding-bottom:54px}
+    .wrap{transform:scale(.90) !important;transform-origin:center}
+  }
+
+</style>
+</head>
+<body>
+
+<nav aria-label="Storyboard navigation">
+  <a href="#s1">1</a><a href="#s2">2</a><a href="#s3">3</a><a href="#s4">4</a>
+  <a href="#s5">5</a><a href="#s6">6</a><a href="#s7">7</a><a href="#s8">8</a>
+  <a href="#s9">9</a><a href="#s10">10</a><a href="#s11">11</a><a href="#s12">12</a>
+  <a href="#s13">13</a>
+</nav>
+
+<section class="hero" id="s1">
+  <div class="scene-no">01</div><div class="time">OPENING · 0:00–0:10</div>
+  <div class="wrap grid2">
+    <div>
+      <span class="eyebrow">Razorpay Buildathon</span>
+      <div class="logo" style="margin-top:22px"><div class="shield"></div></div>
+      <h1>Checkout<br><span class="accent">Guardian</span></h1>
+      <h3>Payment failed. Checkout <span class="accent">didn’t.</span></h3>
+      <p>A state-aware, merchant-governed recovery control layer for Razorpay merchants.</p>
+      <div class="benefits">
+        <div class="benefit"><span class="icon">⌕</span>Verify truth</div>
+        <div class="benefit"><span class="icon">✦</span>Govern recovery</div>
+        <div class="benefit"><span class="icon">↗</span>Prove outcome</div>
+      </div>
+    </div>
+    <div class="product">
+      <div class="fail-card"><div class="x">×</div><h3 style="font-size:22px;text-align:center;margin-top:13px;color:#d62e3d">Payment Failed</h3><p style="font-size:14px;text-align:center">Your payment could not be completed.</p><div class="button">Try Again</div></div>
+      <div class="headphones"><div class="ear left"></div><div class="ear right"></div></div>
+      <div class="price-card"><b>Auralis</b><div class="small">Premium Headphones</div><h3 style="margin:6px 0 0">₹3,499</h3></div>
+    </div>
+  </div>
+  <div class="hint"><span>Scroll to begin</span><span class="chev">↓</span></div>
+</section>
+
+<section id="s2">
+  <div class="scene-no">02</div><div class="time">THE CUSTOMER · 0:10–0:25</div>
+  <div class="wrap center">
+    <span class="eyebrow">The everyday checkout</span>
+    <h2>A customer wants to buy.</h2>
+    <p>They chose the product. They reached checkout. Their purchase intent is real.</p>
+    <div class="customer-flow">
+      <div class="person">👤</div><div class="arrow">→</div>
+      <div class="checkout">
+        <div class="small">Auralis Premium Headphones</div>
+        <h3 style="margin:8px 0">₹3,499</h3>
+        <div class="button">Pay with Razorpay</div>
+      </div>
+    </div>
+  </div>
+  <div class="hint"><span>One scroll · next scene</span><span class="chev">↓</span></div>
+</section>
+
+<section class="failure-bg" id="s3">
+  <div class="scene-no">03</div><div class="time">THE FAILURE · 0:25–0:40</div>
+  <div class="wrap center">
+    <span class="eyebrow">Then something breaks</span>
+    <h2>But the payment fails.</h2>
+    <div class="story-card">
+      <div class="x">×</div>
+      <h3 style="color:#d62e3d;margin-top:18px">Payment Failed</h3>
+      <p>Your payment could not be completed. Please try again.</p>
+      <div class="button" style="max-width:280px;margin:24px auto 0">Try Again</div>
+    </div>
+  </div>
+  <div class="hint"><span>What should happen next?</span><span class="chev">↓</span></div>
+</section>
+
+<section id="s4">
+  <div class="scene-no">04</div><div class="time">THE REAL QUESTION · 0:40–1:00</div>
+  <div class="wrap center">
+    <div class="question">So… just <span class="retry">retry?</span></div>
+    <p style="margin-top:18px">The obvious answer sounds simple. The financial reality isn’t.</p>
+    <div class="keyline">The hard part isn’t retrying a payment.<br>It’s knowing when another payment attempt is actually safe.</div>
+  </div>
+  <div class="hint"><span>Why?</span><span class="chev">↓</span></div>
+</section>
+
+<section id="s5">
+  <div class="scene-no">05</div><div class="time">PAYMENT TRUTH · 1:00–1:20</div>
+  <div class="wrap center">
+    <span class="eyebrow">A “failed” payment can mean different things</span>
+    <h2>Before recovery, we need payment truth.</h2>
+    <div class="states">
+      <div class="state"><div class="bubble bg-red">×</div><b>Actually failed</b><div class="small">Recovery may be justified.</div></div>
+      <div class="state"><div class="bubble bg-green">✓</div><b>Already succeeded</b><div class="small">Another payment is unnecessary.</div></div>
+      <div class="state"><div class="bubble bg-blue">◷</div><b>Still uncertain</b><div class="small">Treating uncertainty as failure is unsafe.</div></div>
+      <div class="state"><div class="bubble bg-violet">1</div><b>Limit reached</b><div class="small">Merchant policy may require STOP.</div></div>
+    </div>
+  </div>
+  <div class="hint"><span>Introduce the solution</span><span class="chev">↓</span></div>
+</section>
+
+<section class="guardian-bg" id="s6">
+  <div class="scene-no">06</div><div class="time">INTRODUCING GUARDIAN · 1:20–1:40</div>
+  <div class="wrap center">
+    <span class="eyebrow">Checkout Guardian</span>
+    <h2>Verify truth. Govern the decision. Recover only when safe.</h2>
+    <div class="flowline">
+      <div class="step"><div class="icon">⌕</div><b>Verify</b><span class="small">Razorpay truth</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="step"><div class="icon">✦</div><b>Recommend</b><span class="small">AI advisory</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="step"><div class="icon">✓</div><b>Govern</b><span class="small">Merchant policy</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="step"><div class="icon">↻</div><b>Recover</b><span class="small">Only when allowed</span></div>
+      <div class="flow-arrow">→</div>
+      <div class="step"><div class="icon">₹</div><b>Prove</b><span class="small">Financial outcome</span></div>
+    </div>
+    <div class="triad">
+      <div class="choice recover">✓ RECOVER</div>
+      <div class="choice hold">◷ HOLD</div>
+      <div class="choice stop">— STOP</div>
+    </div>
+  </div>
+  <div class="hint"><span>Next: live product</span><span class="chev">↓</span></div>
+</section>
+
+<section class="switch" id="s7">
+  <div class="scene-no" style="background:white;color:var(--navy)">07</div><div class="time" style="color:#a9c8ff">LIVE DEMO · ~1:40–2:50</div>
+  <div class="wrap center">
+    <div class="switch-label">Switch away from this storyboard</div>
+    <div class="switch-title">SHOW THE REAL<br>CHECKOUT GUARDIAN</div>
+    <p>Demonstrate the ₹3,499 Razorpay Test Mode failure and successful recovery.</p>
+    <div class="switch-box">
+      <div class="demo-path">
+        <span class="pill">Auralis ₹3,499</span><span class="pill">Razorpay failure</span><span class="pill">Verify</span>
+        <span class="pill">Policy ALLOW</span><span class="pill">Recover Payment</span><span class="pill">Payment captured</span><span class="pill">₹3,499 recovered</span>
+      </div>
+    </div>
+    <p style="margin-top:30px;font-size:18px;color:#b9d3ff">When the live recovery is complete, return to this tab and scroll once.</p>
+  </div>
+</section>
+
+<section class="hold-bg" id="s8">
+  <div class="scene-no">08</div><div class="time">HOLD · AFTER LIVE DEMO</div>
+  <div class="wrap center">
+    <span class="eyebrow" style="color:#9c6800;border-color:#f5df9d;background:#fff9e8">Not every payment should be recovered</span>
+    <h2 style="margin-top:14px">Sometimes the safest action is to wait.</h2>
+
+    <div class="action-card hold" style="width:min(840px,100%);margin:24px auto 0;padding:30px 34px">
+      <h3 style="text-align:center;margin-bottom:20px">◷ HOLD / ESCALATE</h3>
+      <div style="display:grid;gap:16px">
+        <div class="action-row" style="margin:0"><span>✓</span><p>Payment truth is still uncertain.</p></div>
+        <div class="action-row" style="margin:0"><span>✓</span><p>Guardian does <b>not</b> open another checkout.</p></div>
+        <div class="action-row" style="margin:0"><span>✓</span><p>The case waits for enough truth before action.</p></div>
+      </div>
+    </div>
+
+    <div style="margin-top:22px;font-size:clamp(22px,2.4vw,34px);font-weight:900;color:#8d5d00">
+      Uncertainty reduces autonomy.
+    </div>
+  </div>
+  <div class="hint"><span>Next · when recovery must stop</span><span class="chev">↓</span></div>
+</section>
+
+<section class="stop-bg" id="s9">
+  <div class="scene-no">09</div><div class="time">STOP</div>
+  <div class="wrap center">
+    <span class="eyebrow" style="color:#b42e38;border-color:#f7d0d4;background:#fff6f7">Recovery must have limits</span>
+    <h2 style="margin-top:14px">Guardian also knows when to stop.</h2>
+
+    <div class="action-card stop" style="width:min(820px,100%);margin:24px auto 0;padding:30px 34px">
+      <h3 style="text-align:center;margin-bottom:20px">— STOP</h3>
+      <div style="display:grid;gap:16px">
+        <div class="action-row" style="margin:0"><span>✓</span><p>Already successful or already recovered.</p></div>
+        <div class="action-row" style="margin:0"><span>✓</span><p>Merchant recovery limit reached.</p></div>
+        <div class="action-row" style="margin:0"><span>✓</span><p>No further autonomous recovery.</p></div>
+      </div>
+    </div>
+
+    <div class="triad" style="width:min(820px,100%);margin-top:22px">
+      <div class="choice recover" style="font-size:20px">RECOVER</div>
+      <div class="choice hold" style="font-size:20px">HOLD</div>
+      <div class="choice stop" style="font-size:20px">STOP</div>
+    </div>
+  </div>
+  <div class="hint"><span>Next · merchant portfolio</span><span class="chev">↓</span></div>
+</section>
+
+<section class="portfolio" id="s10">
+  <div class="scene-no">10</div><div class="time">MERCHANT VIEW · PORTFOLIO</div>
+  <div class="wrap center">
+    <span class="eyebrow">From one checkout to a portfolio of revenue at risk</span>
+    <h2 style="margin-top:14px;margin-bottom:4px">One merchant. Many payment cases.</h2>
+    <p>Guardian measures the money, then separates every case by the safest next action.</p>
+
+    <div style="margin-top:20px">
+      <div class="money" style="font-size:clamp(70px,8.2vw,118px);line-height:.95">₹6,998</div>
+      <div style="font-size:18px;color:#51627f;margin-top:6px">
+        recovered across 2 persisted completed Razorpay Test Mode cases
+      </div>
+    </div>
+
+    <div class="triad" style="width:min(960px,100%);margin-top:24px">
+      <div class="choice recover" style="padding:20px">
+        <div style="font-size:22px">✓ RECOVER</div>
+        <div style="font-size:15px;font-weight:650;margin-top:8px">Confirmed failed + eligible + policy allows</div>
+      </div>
+      <div class="choice hold" style="padding:20px">
+        <div style="font-size:22px">◷ HOLD</div>
+        <div style="font-size:15px;font-weight:650;margin-top:8px">Uncertain truth → escalate, no second checkout</div>
+      </div>
+      <div class="choice stop" style="padding:20px">
+        <div style="font-size:22px">— STOP</div>
+        <div style="font-size:15px;font-weight:650;margin-top:8px">Resolved or recovery limit reached</div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-top:22px">
+      <div class="eyebrow" style="color:var(--ink)">₹27,992 revenue at risk</div>
+      <div class="eyebrow" style="color:var(--ink)">₹20,994 recoverable</div>
+      <div class="eyebrow" style="color:var(--ink)">₹6,998 held / escalated</div>
+      <div class="eyebrow" style="color:var(--ink)">2 recovered cases</div>
+    </div>
+  </div>
+  <div class="hint"><span>Measured recovery · escalation · stopping rules</span><span class="chev">↓</span></div>
+</section>
+
+<section id="s11">
+  <div class="scene-no">11</div><div class="time">GOVERNED RECOVERY</div>
+  <div class="wrap center">
+    <span class="eyebrow">Bounded financial action</span>
+    <h2 style="margin-top:14px">Who is allowed to decide what?</h2>
+    <p>The architecture separates payment truth, recommendation, and authorization.</p>
+
+    <div class="authority" style="width:min(980px,100%);margin-top:30px">
+      <div class="auth" style="padding:26px 20px">
+        <div class="icon">R</div>
+        <b>Razorpay</b>
+        <span class="small">establishes payment truth</span>
+      </div>
+      <div class="arrow">→</div>
+      <div class="auth" style="padding:26px 20px">
+        <div class="icon">✦</div>
+        <b>Gemini</b>
+        <span class="small">recommends a bounded action</span>
+      </div>
+      <div class="arrow">→</div>
+      <div class="auth" style="padding:26px 20px">
+        <div class="icon">✓</div>
+        <b>Merchant Policy</b>
+        <span class="small">authorizes, holds, or stops</span>
+      </div>
+    </div>
+
+    <div style="width:min(900px,100%);margin-top:26px;padding:18px 24px;border-radius:18px;background:#f4f8ff;border:1px solid #dbe7f8;font-size:clamp(20px,2.1vw,30px);font-weight:900">
+      Razorpay establishes payment truth. AI recommends. Merchant policy authorizes.
+    </div>
+  </div>
+  <div class="hint"><span>Next · audit trail</span><span class="chev">↓</span></div>
+</section>
+
+<section class="guardian-bg" id="s12">
+  <div class="scene-no">12</div><div class="time">AUDIT TRAIL · TECHNICAL PROOF</div>
+  <div class="wrap center">
+    <span class="eyebrow">Every action can be reconstructed</span>
+    <h2 style="margin-top:14px;margin-bottom:4px">From payment truth to financial outcome.</h2>
+    <p>A Decision Receipt connects the recommendation, merchant policy, execution, and money.</p>
+
+    <div class="receipt" style="width:min(820px,100%);margin-top:22px;padding:22px 30px">
+      <div class="rrow"><b>Payment state</b><span>FAILED</span></div>
+      <div class="rrow"><b>Recommended action</b><span>REOPEN_CHECKOUT</span></div>
+      <div class="rrow"><b>Merchant policy</b><span style="color:var(--green);font-weight:900">ALLOW</span></div>
+      <div class="rrow"><b>Executed action</b><span>REOPEN_CHECKOUT</span></div>
+      <div class="rrow"><b>Outcome</b><span style="color:var(--green);font-weight:900">RECOVERED · ₹3,499</span></div>
+    </div>
+
+    <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-top:22px">
+      <div class="eyebrow" style="color:var(--ink)">Real Razorpay Test Mode</div>
+      <div class="eyebrow" style="color:var(--ink)">Verified webhooks</div>
+      <div class="eyebrow" style="color:var(--ink)">Server-side verification</div>
+      <div class="eyebrow" style="color:var(--ink)">Persisted decisions</div>
+    </div>
+
+    <div style="margin-top:22px;font-size:clamp(34px,4vw,54px);font-weight:950;color:var(--green)">246 / 246 tests passing</div>
+  </div>
+  <div class="hint"><span>Final story</span><span class="chev">↓</span></div>
+</section>
+
+<section class="close" id="s13">
+  <div class="scene-no" style="background:white;color:var(--navy)">13</div>
+  <div class="wrap center" style="max-width:1040px">
+    <span class="eyebrow" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.18);color:#a9c8ff">Checkout Guardian</span>
+
+    <h2 style="margin-top:18px;color:white;max-width:900px">
+      Governed revenue recovery around payment truth.
+    </h2>
+
+    <div style="width:min(900px,100%);display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:24px">
+      <div style="padding:22px 16px;border-radius:20px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.13)">
+        <div style="font-size:28px">◎</div><b style="display:block;margin-top:8px">Detect</b><span style="font-size:14px;color:#b9d3ff">revenue at risk</span>
+      </div>
+      <div style="padding:22px 16px;border-radius:20px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.13)">
+        <div style="font-size:28px">✓</div><b style="display:block;margin-top:8px">Recover</b><span style="font-size:14px;color:#b9d3ff">what is safe</span>
+      </div>
+      <div style="padding:22px 16px;border-radius:20px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.13)">
+        <div style="font-size:28px">◷</div><b style="display:block;margin-top:8px">Hold</b><span style="font-size:14px;color:#b9d3ff">what is uncertain</span>
+      </div>
+      <div style="padding:22px 16px;border-radius:20px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.13)">
+        <div style="font-size:28px">—</div><b style="display:block;margin-top:8px">Stop</b><span style="font-size:14px;color:#b9d3ff">when policy says stop</span>
+      </div>
+    </div>
+
+    <div style="margin-top:38px;padding-top:30px;border-top:1px solid rgba(255,255,255,.18);width:min(900px,100%)">
+      <div style="font-size:clamp(42px,5.4vw,78px);font-weight:950;line-height:1.02;letter-spacing:-.05em">
+        Payment failed.<br>
+        Checkout <span style="color:#59a5ff">didn’t.</span>
+      </div>
+      <p style="margin:18px auto 0;color:#b9d3ff;font-size:18px">Recover safely. Escalate uncertainty. Prove the outcome.</p>
+    </div>
+  </div>
+</section>
+
+<script>
+  // Force each mouse-wheel gesture to advance exactly one scene.
+  let locked = false;
+  const sections = [...document.querySelectorAll("section")];
+  function currentIndex(){
+    let best = 0, bestDist = Infinity;
+    sections.forEach((s,i)=>{
+      const d = Math.abs(s.getBoundingClientRect().top);
+      if(d < bestDist){bestDist=d;best=i;}
+    });
+    return best;
+  }
+  window.addEventListener("wheel", (e)=>{
+    if (locked) { e.preventDefault(); return; }
+    const idx = currentIndex();
+    const dir = e.deltaY > 0 ? 1 : -1;
+    const next = Math.max(0, Math.min(sections.length-1, idx+dir));
+    if(next !== idx){
+      e.preventDefault();
+      locked = true;
+      sections[next].scrollIntoView({behavior:"smooth",block:"start"});
+      setTimeout(()=>locked=false,700);
+    }
+  }, {passive:false});
+
+  window.addEventListener("keydown",(e)=>{
+    if(["ArrowDown","PageDown"," "].includes(e.key)){
+      e.preventDefault(); const i=currentIndex(); sections[Math.min(i+1,sections.length-1)].scrollIntoView({behavior:"smooth"});
+    }
+    if(["ArrowUp","PageUp"].includes(e.key)){
+      e.preventDefault(); const i=currentIndex(); sections[Math.max(i-1,0)].scrollIntoView({behavior:"smooth"});
+    }
+  });
+</script>
+</body>
+</html>
