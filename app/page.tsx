@@ -21,14 +21,19 @@ export default function Home() {
     <div className="flex min-h-full flex-col">
       <header className="border-b border-line">
         <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-5 sm:px-8">
-          <p className="text-sm font-semibold tracking-[0.22em] uppercase">
-            Auralis
-          </p>
+          <div className="flex items-center gap-3">
+            <p className="text-sm font-semibold tracking-[0.18em] uppercase">
+              Auralis
+            </p>
+            <p className="hidden text-xs text-muted sm:block">
+              Protected by Checkout Guardian
+            </p>
+          </div>
           <Link
             href="/dashboard"
             className="text-xs tracking-wide text-muted uppercase hover:text-foreground"
           >
-            Guardian dashboard
+            Merchant dashboard
           </Link>
         </div>
       </header>
@@ -75,6 +80,11 @@ export default function Home() {
           </ul>
 
           <PurchasePanel />
+          <p className="mt-4 max-w-md text-sm leading-6 text-muted">
+            Payment failed. Checkout didn’t. If a payment fails, Checkout
+            Guardian verifies Razorpay truth before any retry and will not
+            reopen checkout while a previous payment is still unresolved.
+          </p>
         </section>
       </main>
     </div>

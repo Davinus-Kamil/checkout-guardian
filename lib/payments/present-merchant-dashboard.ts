@@ -32,6 +32,7 @@ export type PresentedMerchantDashboardDecision = {
   recoveredAmountPaise: number | null;
   createdAtIso: string;
   headline: string;
+  story: string | null;
   visualStatus: MerchantDashboardVisualStatus;
 };
 
@@ -62,6 +63,26 @@ export function formatPaiseAsInrRupees(paise: number): string {
   }).format(rupees);
 }
 
+const GUARDIAN_TERM_LABELS: Record<string, string> = {
+  GENERIC_PAYMENT_FAILED: "Payment failure confirmed",
+  REOPEN_CHECKOUT: "Reopen checkout safely",
+  MAX_ATTEMPTS_REACHED: "Recovery blocked — maximum safe attempts reached",
+  CONFIRMED_FAILURE_REQUIRED: "Potential duplicate-payment risk prevented",
+  UNRESOLVED: "Previous payment still being verified",
+  RECOVERED: "Payment recovered successfully",
+  FAILED: "Payment failed",
+  ALLOW: "Authorized",
+  BLOCK: "Not authorized",
+};
+
+export function humanizeGuardianTerm(value: string | null): string | null {
+  if (!value || !value.trim()) {
+    return null;
+  }
+
+  return GUARDIAN_TERM_LABELS[value] ?? null;
+}
+
 export function deriveDecisionHeadline(
   decision: MerchantDashboardDecisionRecord,
 ): string {
@@ -74,12 +95,16 @@ export function deriveDecisionHeadline(
     return `${formatPaiseAsInrRupees(decision.recoveredAmount)} recovered`;
   }
 
+  if (decision.policyReason === "MAX_ATTEMPTS_REACHED") {
+    return "Unsafe recovery attempt blocked";
+  }
+
   if (
     decision.paymentState === "UNRESOLVED" &&
     decision.policyResult === "BLOCK" &&
     decision.policyReason === "CONFIRMED_FAILURE_REQUIRED"
   ) {
-    return "Potential duplicate-payment risk prevented";
+    return "Potential duplicate payment prevented";
   }
 
   if (decision.policyResult === "BLOCK") {
@@ -87,6 +112,28 @@ export function deriveDecisionHeadline(
   }
 
   return "Decision recorded";
+}
+
+export function deriveDecisionStory(
+  decision: MerchantDashboardDecisionRecord,
+): string | null {
+  if (decision.outcome === "RECOVERED") {
+    return "Guardian verified the failure, recommended recovery, merchant policy allowed it, and the payment completed successfully.";
+  }
+
+  if (decision.policyReason === "MAX_ATTEMPTS_REACHED") {
+    return "The configured recovery-attempt limit had already been reached.";
+  }
+
+  if (
+    decision.paymentState === "UNRESOLVED" &&
+    decision.policyResult === "BLOCK" &&
+    decision.policyReason === "CONFIRMED_FAILURE_REQUIRED"
+  ) {
+    return "Guardian could not confirm the previous payment had failed, so merchant policy stopped another payment attempt.";
+  }
+
+  return null;
 }
 
 export function deriveDecisionVisualStatus(
@@ -155,6 +202,7 @@ export function presentMerchantDashboardDecision(
         : null,
     createdAtIso: decision.createdAt.toISOString(),
     headline: deriveDecisionHeadline(decision),
+    story: deriveDecisionStory(decision),
     visualStatus: deriveDecisionVisualStatus(decision),
   };
 }

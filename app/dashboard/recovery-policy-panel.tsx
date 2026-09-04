@@ -123,10 +123,13 @@ export default function RecoveryPolicyPanel({
   return (
     <section className="mt-10 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5 sm:p-6">
       <h2 className="text-lg font-semibold tracking-tight">Recovery Policy</h2>
+      <p className="mt-1 text-xs font-medium tracking-[0.16em] text-emerald-400 uppercase">
+        Merchant policy is the authorization boundary
+      </p>
       <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-400">
-        Merchant policy is the final authority. AI can recommend recovery, but
-        policy decides whether Guardian may act. AI recommendation is not
-        authorization.
+        AI can recommend recovery. Merchant policy decides whether Guardian may
+        act. Recommendation is not authorization, and execution happens only
+        after policy ALLOW.
       </p>
 
       {policy === null ? (

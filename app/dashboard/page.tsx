@@ -6,6 +6,7 @@ import { loadMerchantDashboard } from "@/lib/payments/load-merchant-dashboard";
 import { loadMerchantPolicy } from "@/lib/payments/load-merchant-policy";
 import {
   formatPaiseAsInrRupees,
+  humanizeGuardianTerm,
   type PresentedMerchantDashboard,
   type PresentedMerchantDashboardDecision,
 } from "@/lib/payments/present-merchant-dashboard";
@@ -84,14 +85,19 @@ function Fact({
   label: string;
   value: string | null;
 }) {
+  const human = humanizeGuardianTerm(value);
+
   return (
     <div>
       <dt className="text-[11px] tracking-[0.16em] text-zinc-500 uppercase">
         {label}
       </dt>
       <dd className="mt-1 text-sm break-words text-zinc-200">
-        {value && value.trim() ? value : "—"}
+        {human ? human : value && value.trim() ? value : "—"}
       </dd>
+      {human && value ? (
+        <dd className="mt-0.5 font-mono text-[11px] text-zinc-500">{value}</dd>
+      ) : null}
     </div>
   );
 }
@@ -106,9 +112,16 @@ function DecisionCard({
       className={`rounded-2xl border p-5 ${statusClass(decision.visualStatus)}`}
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-sm font-medium text-zinc-100">{decision.headline}</p>
-          <p className="mt-1 text-xs text-zinc-400">
+        <div className="max-w-3xl">
+          <p className="text-lg font-semibold tracking-tight text-zinc-50">
+            {decision.headline}
+          </p>
+          {decision.story ? (
+            <p className="mt-2 text-sm leading-6 text-zinc-300">
+              {decision.story}
+            </p>
+          ) : null}
+          <p className="mt-2 text-xs text-zinc-500">
             {formatWhen(decision.createdAtIso)}
           </p>
         </div>
@@ -140,6 +153,85 @@ function DecisionCard({
   );
 }
 
+function AuthorityFlow() {
+  const steps = [
+    {
+      title: "Verified payment state",
+      body: "Razorpay truth, not AI.",
+    },
+    {
+      title: "AI advisory",
+      body: "Recommendation only.",
+    },
+    {
+      title: "Merchant policy",
+      body: "Final authorization.",
+    },
+    {
+      title: "Recovery action",
+      body: "Only after policy ALLOW.",
+    },
+  ];
+
+  return (
+    <section className="mt-10 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5 sm:p-6">
+      <h2 className="text-lg font-semibold tracking-tight">
+        AI recommends. Policy authorizes.
+      </h2>
+      <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-400">
+        Execution happens only after merchant policy ALLOW. Guardian never
+        treats an unresolved payment as a confirmed failure.
+      </p>
+      <ol className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {steps.map((step, index) => (
+          <li
+            key={step.title}
+            className="rounded-xl border border-zinc-800 bg-zinc-950/70 px-4 py-4"
+          >
+            <p className="text-[11px] tracking-[0.18em] text-emerald-400 uppercase">
+              {index + 1}
+            </p>
+            <p className="mt-2 text-sm font-medium text-zinc-100">{step.title}</p>
+            <p className="mt-1 text-sm leading-6 text-zinc-500">{step.body}</p>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+function HowGuardianWorks() {
+  const steps = [
+    { title: "Observe", body: "Capture the failed checkout attempt." },
+    { title: "Verify", body: "Confirm payment state from Razorpay." },
+    { title: "Diagnose", body: "Classify only confirmed failure facts." },
+    { title: "Recommend", body: "AI explains a bounded recovery option." },
+    { title: "Gate", body: "Merchant policy decides ALLOW or BLOCK." },
+    { title: "Recover", body: "Reopen checkout only after ALLOW." },
+    { title: "Audit", body: "Persist the full Decision receipt." },
+  ];
+
+  return (
+    <section className="mt-10">
+      <h2 className="text-lg font-semibold tracking-tight">How Guardian works</h2>
+      <p className="mt-1 text-sm text-zinc-500">
+        Observe → Verify → Diagnose → Recommend → Gate → Recover → Audit
+      </p>
+      <ol className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+        {steps.map((step) => (
+          <li
+            key={step.title}
+            className="rounded-xl border border-zinc-800 bg-zinc-900/50 px-3 py-4"
+          >
+            <p className="text-sm font-medium text-zinc-100">{step.title}</p>
+            <p className="mt-1 text-xs leading-5 text-zinc-500">{step.body}</p>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
 function DashboardBody({
   dashboard,
   policy,
@@ -160,8 +252,9 @@ function DashboardBody({
             <h1 className="mt-2 text-3xl font-semibold tracking-tight">
               Payment failed. Checkout didn’t.
             </h1>
-            <p className="mt-2 max-w-xl text-sm leading-6 text-zinc-400">
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
               State-aware payment recovery with merchant-governed safety.
+              AI can recommend. Only merchant policy can authorize.
             </p>
           </div>
           <Link
@@ -178,17 +271,17 @@ function DashboardBody({
           <MetricCard
             label="Revenue Recovered"
             value={formatPaiseAsInrRupees(metrics.revenueRecoveredPaise)}
-            hint="Sum of persisted recoveredAmount on RECOVERED decisions."
+            hint="Revenue successfully saved through verified recovery."
           />
           <MetricCard
             label="Recoveries Completed"
             value={String(metrics.recoveriesCompleted)}
-            hint="Decisions with outcome RECOVERED."
+            hint="Verified failures that completed a safe recovery."
           />
           <MetricCard
             label="Unsafe Recoveries Blocked"
             value={String(metrics.unsafeRecoveriesBlocked)}
-            hint="Decisions with policyResult BLOCK."
+            hint="Recovery actions stopped by merchant safety policy."
           />
           <MetricCard
             label="Recovery Success Rate"
@@ -197,10 +290,12 @@ function DashboardBody({
                 ? "—"
                 : `${metrics.recoverySuccessRatePercent}%`
             }
-            hint="Recovered ÷ (recovered + blocked)."
+            hint="Share of decided recoveries that completed safely."
           />
         </section>
 
+        <HowGuardianWorks />
+        <AuthorityFlow />
         <RecoveryPolicyPanel policy={policy} />
 
         <section className="mt-10">
@@ -210,7 +305,7 @@ function DashboardBody({
                 Recent Guardian decisions
               </h2>
               <p className="mt-1 text-sm text-zinc-500">
-                Latest persisted Decision records. Read-only audit trail.
+                Latest persisted decisions. Every Guardian action is auditable.
               </p>
             </div>
           </div>

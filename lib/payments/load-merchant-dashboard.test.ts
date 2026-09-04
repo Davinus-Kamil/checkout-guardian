@@ -56,7 +56,7 @@ test("loader maps aggregate persisted Decision facts without inventing money", a
   assert.equal(dashboard.decisions[0]?.headline, "₹3,499 recovered");
   assert.equal(
     dashboard.decisions[1]?.headline,
-    "Potential duplicate-payment risk prevented",
+    "Potential duplicate payment prevented",
   );
   assert.equal(dashboard.decisions[1]?.policyReason, "CONFIRMED_FAILURE_REQUIRED");
 });

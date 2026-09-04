@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   deriveDecisionHeadline,
+  deriveDecisionStory,
   deriveDecisionVisualStatus,
   formatPaiseAsInrRupees,
+  humanizeGuardianTerm,
   presentMerchantDashboard,
   summarizeMerchantDashboardMetrics,
 } from "./present-merchant-dashboard.ts";
@@ -18,21 +20,24 @@ test("formats persisted paise as INR rupees without inferring extra money", () =
 });
 
 test("RECOVERED decision headline uses persisted recoveredAmount only", () => {
+  const decision = {
+    id: "dec_recovered",
+    paymentState: "FAILED",
+    failureCategory: "GENERIC_PAYMENT_FAILED",
+    proposedAction: "REOPEN_CHECKOUT",
+    proposalReason: "Card failed at issuer.",
+    policyResult: "ALLOW",
+    policyReason: null,
+    executedAction: "REOPEN_CHECKOUT",
+    outcome: "RECOVERED",
+    recoveredAmount: 349900,
+    createdAt: CREATED_AT,
+  };
+
+  assert.equal(deriveDecisionHeadline(decision), "₹3,499 recovered");
   assert.equal(
-    deriveDecisionHeadline({
-      id: "dec_recovered",
-      paymentState: "FAILED",
-      failureCategory: "GENERIC_PAYMENT_FAILED",
-      proposedAction: "REOPEN_CHECKOUT",
-      proposalReason: "Card failed at issuer.",
-      policyResult: "ALLOW",
-      policyReason: null,
-      executedAction: "REOPEN_CHECKOUT",
-      outcome: "RECOVERED",
-      recoveredAmount: 349900,
-      createdAt: CREATED_AT,
-    }),
-    "₹3,499 recovered",
+    deriveDecisionStory(decision),
+    "Guardian verified the failure, recommended recovery, merchant policy allowed it, and the payment completed successfully.",
   );
 });
 
@@ -51,7 +56,7 @@ test("UNRESOLVED BLOCK CONFIRMED_FAILURE_REQUIRED is duplicate-risk copy", () =>
       recoveredAmount: null,
       createdAt: CREATED_AT,
     }),
-    "Potential duplicate-payment risk prevented",
+    "Potential duplicate payment prevented",
   );
   assert.equal(
     deriveDecisionVisualStatus({
@@ -69,6 +74,46 @@ test("UNRESOLVED BLOCK CONFIRMED_FAILURE_REQUIRED is duplicate-risk copy", () =>
     }),
     "blocked",
   );
+});
+
+test("MAX_ATTEMPTS_REACHED is an unsafe-attempt block, not fraud language", () => {
+  const decision = {
+    id: "dec_max",
+    paymentState: "FAILED",
+    failureCategory: "GENERIC_PAYMENT_FAILED",
+    proposedAction: "REOPEN_CHECKOUT",
+    proposalReason: "Reopen checkout.",
+    policyResult: "BLOCK",
+    policyReason: "MAX_ATTEMPTS_REACHED",
+    executedAction: null,
+    outcome: null,
+    recoveredAmount: null,
+    createdAt: CREATED_AT,
+  };
+
+  assert.equal(deriveDecisionHeadline(decision), "Unsafe recovery attempt blocked");
+  assert.equal(
+    deriveDecisionStory(decision),
+    "The configured recovery-attempt limit had already been reached.",
+  );
+  assert.equal(
+    humanizeGuardianTerm("MAX_ATTEMPTS_REACHED"),
+    "Recovery blocked — maximum safe attempts reached",
+  );
+});
+
+test("human-readable Guardian terms keep unknown codes unmapped", () => {
+  assert.equal(
+    humanizeGuardianTerm("GENERIC_PAYMENT_FAILED"),
+    "Payment failure confirmed",
+  );
+  assert.equal(humanizeGuardianTerm("REOPEN_CHECKOUT"), "Reopen checkout safely");
+  assert.equal(
+    humanizeGuardianTerm("UNRESOLVED"),
+    "Previous payment still being verified",
+  );
+  assert.equal(humanizeGuardianTerm("RECOVERED"), "Payment recovered successfully");
+  assert.equal(humanizeGuardianTerm("SOMETHING_NEW"), null);
 });
 
 test("success rate uses recovered vs blocked persisted counts only", () => {
