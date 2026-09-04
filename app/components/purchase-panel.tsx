@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useRef, useState } from "react";
 import {
   interpretRecoverPaymentHttpResponse,
@@ -35,6 +36,113 @@ const RECOVERY_HOLD_MESSAGE =
   "We're confirming your previous payment. Please don't pay again yet.";
 const UNIDENTIFIED_PAYMENT_MESSAGE =
   "This payment could not be identified. Guardian still needs a verified payment identity before recovery can be considered.";
+
+function StatusIcon({
+  kind,
+}: {
+  kind: "failed" | "recovery" | "hold" | "recovered" | "success";
+}) {
+  if (kind === "recovered" || kind === "success") {
+    return (
+      <svg viewBox="0 0 16 16" className="h-4 w-4" aria-hidden="true">
+        <path
+          fill="currentColor"
+          d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13Zm3.03 4.22-3.5 4.5-1.12.07-1.75-1.75 1.06-1.06 1.14 1.14 2.99-3.84 1.18.94Z"
+        />
+      </svg>
+    );
+  }
+
+  if (kind === "hold") {
+    return (
+      <svg viewBox="0 0 16 16" className="h-4 w-4" aria-hidden="true">
+        <path fill="currentColor" d="M5.25 3h1.5v10h-1.5V3Zm4 0h1.5v10H9.25V3Z" />
+      </svg>
+    );
+  }
+
+  if (kind === "recovery") {
+    return (
+      <svg viewBox="0 0 16 16" className="h-4 w-4" aria-hidden="true">
+        <path
+          fill="currentColor"
+          d="M8 1.5a6.5 6.5 0 1 0 6.5 6.5h-1.5A5 5 0 1 1 8 3v1.5L11 2.5 8 .5V1.5Z"
+        />
+      </svg>
+    );
+  }
+
+  return (
+    <svg viewBox="0 0 16 16" className="h-4 w-4" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M8 1.75 14.5 14.25H1.5L8 1.75ZM8 6.2v3.3h.01V6.2H8Zm0 5.3a.8.8 0 1 1 0-1.6.8.8 0 0 1 0 1.6Z"
+      />
+    </svg>
+  );
+}
+
+function StatusSurface({
+  kind,
+  title,
+  body,
+  failedPaymentCaptured,
+  recoveryOutcome,
+  role = "status",
+}: {
+  kind: "failed" | "recovery" | "hold" | "recovered" | "success";
+  title: string;
+  body: string;
+  failedPaymentCaptured?: boolean;
+  recoveryOutcome?: RecoverPaymentClientOutcome | null;
+  role?: "status" | "alert";
+}) {
+  const surface =
+    kind === "failed"
+      ? "border-rose-200 bg-rose-50 text-rose-900"
+      : kind === "hold"
+        ? "border-amber-200 bg-amber-50 text-amber-950"
+        : kind === "recovered"
+          ? "border-emerald-200 bg-emerald-50 text-emerald-950"
+          : kind === "recovery"
+            ? "border-indigo-200 bg-indigo-50 text-indigo-950"
+            : "border-slate-200 bg-slate-50 text-slate-800";
+  const icon =
+    kind === "failed"
+      ? "text-rose-700"
+      : kind === "hold"
+        ? "text-amber-700"
+        : kind === "recovered"
+          ? "text-emerald-700"
+          : kind === "recovery"
+            ? "text-indigo-700"
+            : "text-slate-600";
+
+  return (
+    <div
+      role={role}
+      className={`rounded-lg border px-3 py-2 ${surface}`}
+      data-failed-payment-captured={
+        failedPaymentCaptured === undefined
+          ? undefined
+          : failedPaymentCaptured
+            ? "true"
+            : "false"
+      }
+      data-recovery-outcome={recoveryOutcome ?? undefined}
+    >
+      <div className="flex gap-2.5">
+        <span className={`mt-0.5 shrink-0 ${icon}`}>
+          <StatusIcon kind={kind} />
+        </span>
+        <div>
+          <p className="text-sm font-semibold">{title}</p>
+          <p className="mt-0.5 text-sm leading-6">{body}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 type CreatedOrder = {
   id: string;
@@ -329,33 +437,42 @@ export default function PurchasePanel() {
   }
 
   return (
-    <div className="mt-8 space-y-4">
-      <div className="flex items-center gap-4">
-        <span className="text-sm font-medium tracking-wide text-muted uppercase">
-          Quantity
+    <div
+      id="checkout"
+      className="w-full max-w-[430px] justify-self-end rounded-2xl border border-slate-200 bg-white p-3.5 shadow-[0_16px_40px_rgba(15,23,42,0.08)] lg:max-w-none"
+    >
+      <div className="flex items-center gap-2.5">
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+          <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" aria-hidden="true">
+            <path
+              fill="currentColor"
+              d="M8 1.75A2.75 2.75 0 0 0 5.25 4.5V6H4.5A1.5 1.5 0 0 0 3 7.5v5A1.5 1.5 0 0 0 4.5 14h7A1.5 1.5 0 0 0 13 12.5v-5A1.5 1.5 0 0 0 11.5 6h-.75V4.5A2.75 2.75 0 0 0 8 1.75Zm1.25 4.25h-2.5V4.5a1.25 1.25 0 1 1 2.5 0v1.5Z"
+            />
+          </svg>
         </span>
-        <div className="inline-flex items-center rounded-full border border-line bg-background">
-          <button
-            type="button"
-            onClick={decreaseQuantity}
-            disabled={quantity <= MIN_QUANTITY || isStartingCheckout}
-            aria-label="Decrease quantity"
-            className="flex h-11 w-11 items-center justify-center rounded-l-full text-lg disabled:opacity-40"
-          >
-            −
-          </button>
-          <span className="min-w-8 text-center text-base font-medium tabular-nums">
-            {quantity}
-          </span>
-          <button
-            type="button"
-            onClick={increaseQuantity}
-            disabled={quantity >= MAX_QUANTITY || isStartingCheckout}
-            aria-label="Increase quantity"
-            className="flex h-11 w-11 items-center justify-center rounded-r-full text-lg disabled:opacity-40"
-          >
-            +
-          </button>
+        <div>
+          <h2 className="text-sm font-semibold text-slate-900">Secure Checkout</h2>
+          <p className="text-[11px] text-slate-500">
+            Powered by Razorpay · Protected by Checkout Guardian
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-3 flex items-center gap-3 border-t border-slate-100 pt-3">
+        <span className="relative h-11 w-11 overflow-hidden rounded-lg bg-slate-100 ring-1 ring-slate-200">
+          <Image
+            src="/auralis-headphones.png"
+            alt=""
+            width={88}
+            height={88}
+            className="h-full w-full object-cover"
+          />
+        </span>
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-slate-900">
+            Auralis Premium Headphones
+          </p>
+          <p className="text-sm font-semibold text-slate-900">₹3,499</p>
         </div>
       </div>
 
@@ -363,39 +480,162 @@ export default function PurchasePanel() {
         type="button"
         onClick={handleBuyNow}
         disabled={isStartingCheckout}
-        className="flex h-12 w-full items-center justify-center rounded-full bg-accent px-6 text-base font-semibold tracking-wide text-white transition-colors hover:bg-accent-hover disabled:opacity-60"
+        className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#0b1220] px-5 text-sm font-semibold tracking-wide text-white outline-none hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:opacity-60"
       >
-        {isStartingCheckout ? "Starting checkout…" : "Buy Now"}
+        {isStartingCheckout ? (
+          "Starting checkout…"
+        ) : (
+          <>
+            <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" aria-hidden="true">
+              <path
+                fill="currentColor"
+                d="M8 1.75A2.75 2.75 0 0 0 5.25 4.5V6H4.5A1.5 1.5 0 0 0 3 7.5v5A1.5 1.5 0 0 0 4.5 14h7A1.5 1.5 0 0 0 13 12.5v-5A1.5 1.5 0 0 0 11.5 6h-.75V4.5A2.75 2.75 0 0 0 8 1.75Zm1.25 4.25h-2.5V4.5a1.25 1.25 0 1 1 2.5 0v1.5Z"
+              />
+            </svg>
+            Pay ₹3,499
+            <span aria-hidden="true">→</span>
+          </>
+        )}
       </button>
 
-      {errorMessage ? (
-        <p role="alert" className="text-sm leading-6 text-accent">
-          {errorMessage}
-        </p>
-      ) : null}
-
-      {paymentFailedMessage ? (
-        <p
-          role="status"
-          className="text-sm leading-6 text-muted"
-          data-failed-payment-captured={failedPaymentId ? "true" : "false"}
-          data-recovery-outcome={recoveryOutcome ?? undefined}
-        >
-          {paymentFailedMessage}
-        </p>
-      ) : null}
-
-      {isVerifyingPayment ? (
-        <p className="text-sm leading-6 text-muted">Verifying payment…</p>
-      ) : null}
-
-      {verificationMessage ? (
-        <p className="text-sm leading-6 text-muted">{verificationMessage}</p>
-      ) : null}
-
-      <p className="text-sm leading-6 text-muted">
-        Secure checkout · 7-day easy returns · Support available 9am–9pm IST
+      <p className="mt-2 flex items-center justify-center gap-1.5 text-[11px] text-slate-500">
+        Secure payment powered by
+        <img
+          src="/razorpay-logo.svg"
+          alt="Razorpay"
+          width={88}
+          height={19}
+          className="h-[15px] w-auto"
+        />
       </p>
+
+      <div className="mt-3 border-t border-slate-100 pt-3">
+        <div
+          id="protection"
+          className="rounded-xl bg-[#eef2ff] px-3 py-2.5 ring-1 ring-[#d9e0f8]"
+        >
+          <div className="flex items-start gap-2.5">
+            <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#6d5efc] text-white">
+              <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" aria-hidden="true">
+                <path
+                  fill="currentColor"
+                  d="M8 1.25 2.5 3.5v4.2c0 3.3 2.2 5.7 5.5 6.95C11.3 13.4 13.5 11 13.5 7.7V3.5L8 1.25Z"
+                />
+              </svg>
+            </span>
+            <div>
+              <p className="text-xs font-semibold text-slate-900">
+                Checkout protected by Guardian
+              </p>
+              <p className="mt-1 text-[11px] leading-4 text-slate-600">
+                Payment state is verified before recovery. Uncertain payments are
+                held, and merchant policy controls whether recovery may proceed.
+              </p>
+            </div>
+          </div>
+          <ul className="mt-2.5 space-y-1.5">
+            <li className="flex items-center gap-2 text-[11px] text-slate-700">
+              <span className="flex h-5 w-5 items-center justify-center rounded-md bg-emerald-50 text-emerald-600">
+                <svg viewBox="0 0 16 16" className="h-3 w-3" aria-hidden="true">
+                  <path
+                    fill="currentColor"
+                    d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13Zm3.03 4.22-3.5 4.5-1.12.07-1.75-1.75 1.06-1.06 1.14 1.14 2.99-3.84 1.18.94Z"
+                  />
+                </svg>
+              </span>
+              Payment state verified
+            </li>
+            <li className="flex items-center gap-2 text-[11px] text-slate-700">
+              <span className="flex h-5 w-5 items-center justify-center rounded-md bg-amber-50 text-amber-600">
+                <svg viewBox="0 0 16 16" className="h-3 w-3" aria-hidden="true">
+                  <path fill="currentColor" d="M5.25 3h1.5v10h-1.5V3Zm4 0h1.5v10H9.25V3Z" />
+                </svg>
+              </span>
+              Uncertainty held
+            </li>
+            <li className="flex items-center gap-2 text-[11px] text-slate-700">
+              <span className="flex h-5 w-5 items-center justify-center rounded-md bg-violet-100 text-violet-700">
+                <svg viewBox="0 0 16 16" className="h-3 w-3" aria-hidden="true">
+                  <path
+                    fill="currentColor"
+                    d="M8 1.75A2.75 2.75 0 0 0 5.25 4.5V6H4.5A1.5 1.5 0 0 0 3 7.5v5A1.5 1.5 0 0 0 4.5 14h7A1.5 1.5 0 0 0 13 12.5v-5A1.5 1.5 0 0 0 11.5 6h-.75V4.5A2.75 2.75 0 0 0 8 1.75Zm1.25 4.25h-2.5V4.5a1.25 1.25 0 1 1 2.5 0v1.5Z"
+                  />
+                </svg>
+              </span>
+              Merchant-controlled recovery
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <div className="mt-3 space-y-2">
+        {errorMessage ? (
+          <StatusSurface
+            kind="failed"
+            role="alert"
+            title="Payment couldn’t be completed."
+            body={errorMessage}
+          />
+        ) : null}
+
+        {paymentFailedMessage ? (
+          <StatusSurface
+            kind={
+              recoveryOutcome === "hold"
+                ? "hold"
+                : recoveryOutcome === "started" ||
+                    paymentFailedMessage === CHECKING_RECOVERY_MESSAGE
+                  ? "recovery"
+                  : recoveryOutcome === "unsafe" ||
+                      recoveryOutcome === "payment_not_found"
+                    ? "hold"
+                    : "failed"
+            }
+            title={
+              recoveryOutcome === "hold"
+                ? "We’re confirming your previous payment."
+                : recoveryOutcome === "started" ||
+                    paymentFailedMessage === CHECKING_RECOVERY_MESSAGE
+                  ? "Preparing a safe recovery…"
+                  : recoveryOutcome === "unsafe" ||
+                      recoveryOutcome === "payment_not_found"
+                    ? "We’re confirming your previous payment."
+                    : "Payment couldn’t be completed."
+            }
+            body={
+              recoveryOutcome === "hold"
+                ? "Please don’t pay again yet."
+                : paymentFailedMessage
+            }
+            failedPaymentCaptured={Boolean(failedPaymentId)}
+            recoveryOutcome={recoveryOutcome}
+          />
+        ) : null}
+
+        {isVerifyingPayment ? (
+          <StatusSurface
+            kind="recovery"
+            title="Confirming payment…"
+            body="Verifying payment…"
+          />
+        ) : null}
+
+        {verificationMessage ? (
+          <StatusSurface
+            kind={
+              verificationMessage.toLowerCase().includes("recovered")
+                ? "recovered"
+                : "success"
+            }
+            title={
+              verificationMessage.toLowerCase().includes("recovered")
+                ? "Payment recovered successfully."
+                : "Payment verified successfully"
+            }
+            body={verificationMessage}
+          />
+        ) : null}
+      </div>
     </div>
   );
 }
