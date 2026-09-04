@@ -1,3 +1,4 @@
+import Link from "next/link";
 import PurchasePanel from "./components/purchase-panel";
 
 const features = [
@@ -23,9 +24,12 @@ export default function Home() {
           <p className="text-sm font-semibold tracking-[0.22em] uppercase">
             Auralis
           </p>
-          <p className="text-xs tracking-wide text-muted uppercase">
-            Wireless audio
-          </p>
+          <Link
+            href="/dashboard"
+            className="text-xs tracking-wide text-muted uppercase hover:text-foreground"
+          >
+            Guardian dashboard
+          </Link>
         </div>
       </header>
 
